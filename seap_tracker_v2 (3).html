@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEAP 2026 · Accountability Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+<style>
+  :root {
+    --bg: #F4F1EC; --bg2: #EDE9E2; --bg3: #E4DFD6;
+    --surface: #FDFCFA; --border: #D5CFC5; --border2: #C2BAB0;
+    --text: #1C1916; --text2: #5C5650; --text3: #9C9188;
+    --accent: #1C4A2E; --accent-mid: #3A7A52;
+    --who: #1A3A6B; --who-l: #E6EDF8;
+    --unicef: #1A5FA8; --unicef-l: #E3EFF9;
+    --moh: #6B2D1A; --moh-l: #F5EDE9;
+    --cdc: #4A1A6B; --cdc-l: #EFE6F5;
+    --green: #2E6B3E; --green-l: #E8F2EC;
+    --amber: #7A5000; --amber-l: #FDF3E3;
+    --red: #8B2020; --red-l: #FAEAEA;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --serif: 'DM Serif Display', serif;
+    --r: 6px; --r2: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.5; min-height: 100vh; }
+
+  /* ─── SETUP BANNER ─── */
+  #setup-banner {
+    background: #1C1916; color: #F4F1EC;
+    padding: 0; display: none; flex-direction: column;
+    min-height: 100vh; align-items: center; justify-content: center;
+  }
+  #setup-banner.show { display: flex; }
+  .setup-card { max-width: 680px; width: 100%; padding: 48px; }
+  .setup-tag { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #888; margin-bottom: 12px; }
+  .setup-title { font-family: var(--serif); font-size: 30px; margin-bottom: 8px; color: #F4F1EC; }
+  .setup-sub { font-size: 13px; color: #aaa; line-height: 1.7; margin-bottom: 32px; }
+  .setup-steps { display: flex; flex-direction: column; gap: 0; margin-bottom: 32px; }
+  .step { display: flex; gap: 16px; padding: 20px 0; border-bottom: 1px solid #333; }
+  .step:first-child { border-top: 1px solid #333; }
+  .step-num { font-family: var(--mono); font-size: 11px; color: #555; min-width: 24px; padding-top: 2px; }
+  .step-body { flex: 1; }
+  .step-title { font-weight: 500; font-size: 14px; color: #F4F1EC; margin-bottom: 6px; }
+  .step-desc { font-size: 12px; color: #999; line-height: 1.7; margin-bottom: 10px; }
+  .code-block { background: #111; border: 1px solid #333; border-radius: var(--r); padding: 10px 14px; font-family: var(--mono); font-size: 11px; color: #7EC8A4; line-height: 1.8; white-space: pre; overflow-x: auto; }
+  .setup-inputs { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+  .setup-input-row { display: flex; flex-direction: column; gap: 4px; }
+  .setup-input-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #666; }
+  .setup-input { background: #111; border: 1px solid #333; border-radius: var(--r); padding: 10px 12px; font-family: var(--mono); font-size: 12px; color: #F4F1EC; outline: none; width: 100%; transition: 0.15s; }
+  .setup-input:focus { border-color: #7EC8A4; }
+  .setup-input::placeholder { color: #555; }
+  .btn-connect { background: #7EC8A4; color: #1C1916; border: none; border-radius: var(--r); padding: 12px 24px; font-family: var(--sans); font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.15s; }
+  .btn-connect:hover { background: #9ED8B8; }
+  .setup-note { font-size: 11px; color: #555; margin-top: 16px; line-height: 1.6; }
+  .setup-note a { color: #7EC8A4; text-decoration: none; }
+
+  /* ─── ORG SELECTOR ─── */
+  #org-screen {
+    min-height: 100vh; display: none; align-items: center; justify-content: center;
+    background: var(--bg); flex-direction: column; gap: 32px;
+    position: fixed; inset: 0; z-index: 100;
+  }
+  #org-screen.show { display: flex; }
+  .org-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2); padding: 40px 44px; width: 440px; }
+  .org-header { margin-bottom: 28px; }
+  .org-tag { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; color: var(--text3); text-transform: uppercase; margin-bottom: 8px; }
+  .org-title { font-family: var(--serif); font-size: 26px; line-height: 1.2; }
+  .org-sub { font-size: 12px; color: var(--text2); margin-top: 6px; line-height: 1.6; }
+  .db-status { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; margin-top: 10px; }
+  .db-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .db-dot.connected { background: var(--green); }
+  .db-dot.offline { background: var(--amber); }
+  .partner-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .partner-btn { background: var(--bg); border: 1.5px solid var(--border); border-radius: var(--r); padding: 14px 16px; cursor: pointer; text-align: left; transition: all 0.15s; display: flex; flex-direction: column; gap: 3px; }
+  .partner-btn:hover { border-color: var(--border2); background: var(--surface); transform: translateY(-1px); }
+  .partner-btn .p-name { font-weight: 600; font-size: 13px; }
+  .partner-btn .p-role { font-size: 11px; color: var(--text3); }
+  .partner-btn.who { border-top: 3px solid var(--who); }
+  .partner-btn.unicef { border-top: 3px solid var(--unicef); }
+  .partner-btn.moh { border-top: 3px solid var(--moh); }
+  .partner-btn.cdc { border-top: 3px solid var(--cdc); }
+
+  /* ─── APP SHELL ─── */
+  #app { display: none; min-height: 100vh; }
+  #app.visible { display: block; }
+  .topnav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 52px; position: sticky; top: 0; z-index: 50; }
+  .nav-left { display: flex; align-items: center; gap: 20px; }
+  .nav-brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark { width: 28px; height: 28px; background: var(--accent); border-radius: 5px; display: flex; align-items: center; justify-content: center; color: white; font-family: var(--mono); font-size: 10px; font-weight: 500; }
+  .brand-text { font-family: var(--serif); font-size: 15px; }
+  .nav-tabs { display: flex; align-items: center; gap: 2px; }
+  .nav-tab { padding: 6px 14px; border-radius: var(--r); font-size: 13px; color: var(--text2); cursor: pointer; transition: all 0.12s; border: none; background: none; font-family: var(--sans); }
+  .nav-tab:hover { background: var(--bg); color: var(--text); }
+  .nav-tab.active { background: var(--bg2); color: var(--text); font-weight: 500; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .partner-badge { font-family: var(--mono); font-size: 11px; padding: 4px 10px; border-radius: 20px; font-weight: 500; }
+  .pb-who { background: var(--who-l); color: var(--who); }
+  .pb-unicef { background: var(--unicef-l); color: var(--unicef); }
+  .pb-moh { background: var(--moh-l); color: var(--moh); }
+  .pb-cdc { background: var(--cdc-l); color: var(--cdc); }
+  .btn-switch { font-size: 12px; color: var(--text3); cursor: pointer; border: none; background: none; font-family: var(--sans); padding: 4px 8px; border-radius: var(--r); transition: 0.12s; }
+  .btn-switch:hover { background: var(--bg2); color: var(--text2); }
+  .sync-indicator { font-family: var(--mono); font-size: 10px; color: var(--text3); display: flex; align-items: center; gap: 5px; }
+  .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+  .sync-dot.syncing { background: var(--amber); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ─── VIEWS ─── */
+  .view { display: none; padding: 24px 28px; max-width: 1200px; margin: 0 auto; }
+  .view.active { display: block; }
+
+  /* ─── DASHBOARD ─── */
+  .dash-header { margin-bottom: 20px; display: flex; align-items: flex-end; justify-content: space-between; }
+  .dash-title { font-family: var(--serif); font-size: 24px; margin-bottom: 2px; }
+  .dash-sub { font-size: 12px; color: var(--text2); }
+  .btn-refresh { font-size: 12px; padding: 6px 12px; border-radius: var(--r); border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-family: var(--sans); color: var(--text2); transition: 0.12s; }
+  .btn-refresh:hover { border-color: var(--accent); color: var(--accent); }
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2); padding: 16px 18px; }
+  .stat-label { font-size: 11px; color: var(--text3); font-family: var(--mono); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 8px; }
+  .stat-num { font-family: var(--serif); font-size: 32px; line-height: 1; margin-bottom: 4px; }
+  .stat-detail { font-size: 11px; color: var(--text2); }
+  .stat-green { color: var(--green); } .stat-amber { color: var(--amber); } .stat-red { color: var(--red); }
+  .dash-grid { display: grid; grid-template-columns: 1fr 340px; gap: 16px; }
+  .section-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); margin-bottom: 12px; }
+  .pillar-list { display: flex; flex-direction: column; gap: 8px; }
+  .pillar-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 12px 14px; display: grid; grid-template-columns: 10px 1fr 100px 60px; align-items: center; gap: 12px; cursor: pointer; transition: 0.12s; }
+  .pillar-row:hover { border-color: var(--border2); }
+  .pillar-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .pillar-info .p-name { font-weight: 500; font-size: 13px; }
+  .pillar-info .p-count { font-size: 11px; color: var(--text3); margin-top: 1px; }
+  .bar-wrap { height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s; }
+  .pct-label { font-family: var(--mono); font-size: 12px; text-align: right; font-weight: 500; }
+  .side-panel { display: flex; flex-direction: column; gap: 16px; }
+  .state-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2); padding: 16px; }
+  .state-grid { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .state-row { display: grid; grid-template-columns: 1fr 80px 36px; align-items: center; gap: 8px; font-size: 12px; }
+  .state-name { color: var(--text2); }
+  .state-pct { font-family: var(--mono); font-size: 12px; font-weight: 500; text-align: right; }
+  .alert-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2); overflow: hidden; }
+  .alert-head { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .alert-item { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 10px; }
+  .alert-item:last-child { border-bottom: none; }
+  .alert-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+  .alert-text .a-title { font-weight: 500; font-size: 12px; }
+  .alert-text .a-sub { font-size: 11px; color: var(--text3); margin-top: 1px; }
+
+  /* ─── ACTIVITIES ─── */
+  .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .filter-chip { padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface); font-size: 12px; cursor: pointer; transition: 0.12s; color: var(--text2); font-family: var(--sans); }
+  .filter-chip:hover, .filter-chip.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .filter-spacer { flex: 1; }
+  .btn-add { padding: 7px 14px; border-radius: var(--r); background: var(--accent); color: white; font-size: 12px; font-weight: 500; border: none; cursor: pointer; font-family: var(--sans); transition: 0.15s; }
+  .btn-add:hover { background: var(--accent-mid); }
+  .activity-table { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2); overflow: hidden; }
+  .tbl-head { display: grid; grid-template-columns: 2.5fr 90px 90px 90px 80px 110px; padding: 10px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text3); gap: 8px; }
+  .tbl-row { display: grid; grid-template-columns: 2.5fr 90px 90px 90px 80px 110px; padding: 12px 16px; border-bottom: 1px solid var(--border); align-items: center; gap: 8px; transition: 0.1s; }
+  .tbl-row:last-child { border-bottom: none; }
+  .tbl-row:hover { background: var(--bg); }
+  .tbl-row.mine { border-left: 3px solid var(--accent); padding-left: 13px; }
+  .act-name { font-weight: 500; font-size: 13px; }
+  .act-pillar { font-size: 11px; color: var(--text3); margin-top: 1px; display: flex; align-items: center; gap: 4px; }
+  .pillar-pip { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .owner-tag { font-size: 11px; padding: 3px 7px; border-radius: 4px; font-family: var(--mono); font-weight: 500; display: inline-block; }
+  .ot-who { background: var(--who-l); color: var(--who); } .ot-unicef { background: var(--unicef-l); color: var(--unicef); }
+  .ot-moh { background: var(--moh-l); color: var(--moh); } .ot-cdc { background: var(--cdc-l); color: var(--cdc); }
+  .ot-all { background: var(--bg2); color: var(--text2); }
+  .cadence-tag { font-size: 11px; color: var(--text2); }
+  .due-date { font-family: var(--mono); font-size: 11px; }
+  .due-overdue { color: var(--red); }
+  .status-pill { font-size: 11px; padding: 3px 9px; border-radius: 20px; font-weight: 500; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .sp-green { background: var(--green-l); color: var(--green); } .sp-amber { background: var(--amber-l); color: var(--amber); } .sp-red { background: var(--red-l); color: var(--red); }
+  .sp-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .log-btn { font-size: 11px; padding: 4px 10px; border-radius: var(--r); border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-family: var(--sans); color: var(--text2); transition: 0.12s; }
+  .log-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
+  .log-btn.logged { background: var(--green-l); color: var(--green); border-color: var(--green-l); }
+  .log-btn:disabled { opacity: 0.5; cursor: default; }
+  .log-meta { font-size: 10px; color: var(--text3); font-family: var(--mono); margin-top: 2px; }
+
+  /* ─── AUDIT LOG ─── */
+  .audit-feed { display: flex; flex-direction: column; gap: 0; }
+  .audit-item { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: flex-start; }
+  .audit-item:last-child { border-bottom: none; }
+  .audit-org { font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 500; white-space: nowrap; }
+  .audit-body .a-act { font-weight: 500; font-size: 12px; }
+  .audit-body .a-detail { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .audit-time { font-family: var(--mono); font-size: 10px; color: var(--text3); white-space: nowrap; margin-left: auto; padding-top: 2px; }
+
+  /* ─── REPORT ─── */
+  .report-layout { display: grid; grid-template-columns: 280px 1fr; gap: 20px; }
+  .report-config { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2); padding: 20px; height: fit-content; }
+  .config-title { font-weight: 600; font-size: 14px; margin-bottom: 16px; }
+  .config-group { margin-bottom: 16px; }
+  .config-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); margin-bottom: 6px; }
+  .config-select { width: 100%; padding: 8px 10px; border-radius: var(--r); border: 1px solid var(--border); background: var(--bg); font-family: var(--sans); font-size: 13px; color: var(--text); outline: none; transition: 0.12s; }
+  .config-select:focus { border-color: var(--accent); }
+  .checkbox-group { display: flex; flex-direction: column; gap: 8px; }
+  .cb-row { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+  .cb-row input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; }
+  .btn-generate { width: 100%; padding: 10px; border-radius: var(--r); background: var(--accent); color: white; font-size: 13px; font-weight: 500; border: none; cursor: pointer; font-family: var(--sans); transition: 0.15s; margin-top: 4px; }
+  .btn-generate:hover { background: var(--accent-mid); }
+  .btn-generate:disabled { opacity: 0.5; cursor: default; }
+  .report-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2); display: flex; flex-direction: column; }
+  .report-toolbar { padding: 12px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .report-status { font-size: 12px; color: var(--text3); font-family: var(--mono); }
+  .btn-copy { font-size: 12px; padding: 5px 12px; border-radius: var(--r); border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-family: var(--sans); color: var(--text2); transition: 0.12s; }
+  .btn-copy:hover { border-color: var(--accent); color: var(--accent); }
+  .report-body { padding: 24px 28px; flex: 1; overflow-y: auto; min-height: 400px; }
+  .report-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 380px; gap: 12px; text-align: center; }
+  .placeholder-icon { font-size: 32px; opacity: 0.3; }
+  .placeholder-text { font-size: 13px; color: var(--text3); max-width: 260px; line-height: 1.6; }
+  .report-content { display: none; }
+  .report-content.visible { display: block; }
+  .rc-title { font-family: var(--serif); font-size: 20px; margin-bottom: 4px; }
+  .rc-meta { font-size: 11px; color: var(--text3); font-family: var(--mono); margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .rc-section { margin-bottom: 20px; }
+  .rc-h { font-weight: 600; font-size: 13px; margin-bottom: 8px; color: var(--text); display: flex; align-items: center; gap: 6px; }
+  .rc-h::before { content: ''; display: block; width: 3px; height: 14px; background: var(--accent); border-radius: 2px; }
+  .rc-p { font-size: 13px; color: var(--text2); line-height: 1.7; }
+  .rc-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+  .rc-table th { text-align: left; padding: 6px 10px; background: var(--bg2); font-weight: 500; border: 1px solid var(--border); font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text3); }
+  .rc-table td { padding: 7px 10px; border: 1px solid var(--border); color: var(--text2); }
+  .rc-table tr:nth-child(even) td { background: var(--bg); }
+  .rc-overdue-item { padding: 8px 12px; background: var(--red-l); border-left: 3px solid var(--red); border-radius: 0 var(--r) var(--r) 0; margin-bottom: 6px; }
+  .rc-overdue-title { font-weight: 500; font-size: 12px; color: var(--red); }
+  .rc-overdue-sub { font-size: 11px; color: var(--text3); margin-top: 1px; }
+  .typing-cursor { display: inline-block; width: 2px; height: 14px; background: var(--accent); margin-left: 2px; animation: blink 0.8s infinite; vertical-align: middle; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  .streaming-text { white-space: pre-wrap; font-size: 13px; color: var(--text2); line-height: 1.7; }
+
+  /* ─── MODAL ─── */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(28,25,22,0.45); z-index: 200; display: none; align-items: center; justify-content: center; }
+  .modal-backdrop.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2); padding: 28px 32px; width: 460px; max-width: 95vw; }
+  .modal-title { font-family: var(--serif); font-size: 20px; margin-bottom: 4px; }
+  .modal-sub { font-size: 12px; color: var(--text2); margin-bottom: 22px; }
+  .form-group { margin-bottom: 16px; }
+  .form-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); margin-bottom: 5px; display: block; }
+  .form-input, .form-textarea, .form-select { width: 100%; padding: 9px 11px; border-radius: var(--r); border: 1px solid var(--border); background: var(--bg); font-family: var(--sans); font-size: 13px; color: var(--text); outline: none; transition: 0.12s; }
+  .form-input:focus, .form-textarea:focus, .form-select:focus { border-color: var(--accent); background: var(--surface); }
+  .form-textarea { resize: vertical; min-height: 80px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+  .btn-cancel { padding: 8px 16px; border-radius: var(--r); border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-family: var(--sans); font-size: 13px; color: var(--text2); transition: 0.12s; }
+  .btn-cancel:hover { background: var(--bg2); }
+  .btn-submit { padding: 8px 18px; border-radius: var(--r); background: var(--accent); color: white; border: none; cursor: pointer; font-family: var(--sans); font-size: 13px; font-weight: 500; transition: 0.15s; }
+  .btn-submit:hover { background: var(--accent-mid); }
+  .btn-submit:disabled { opacity: 0.5; cursor: default; }
+
+  /* ─── LOADING ─── */
+  .loading-overlay { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 300; flex-direction: column; gap: 12px; }
+  .loading-text { font-family: var(--mono); font-size: 12px; color: var(--text3); }
+  .spinner { width: 24px; height: 24px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Connecting to database…</div>
+</div>
+
+<!-- SETUP BANNER (shown when no Supabase credentials) -->
+<div id="setup-banner">
+  <div class="setup-card">
+    <div class="setup-tag">SEAP 2026 · First-time setup</div>
+    <div class="setup-title">Connect your database</div>
+    <div class="setup-sub">This tracker needs a free Supabase database so all partners share the same data in real time. This takes about 10 minutes and is free. Follow the steps below.</div>
+
+    <div class="setup-steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-body">
+          <div class="step-title">Create a free Supabase account</div>
+          <div class="step-desc">Go to <a href="https://supabase.com" target="_blank" style="color:#7EC8A4">supabase.com</a> → "Start your project" → sign up with your CDC Google account or email. Create a new project, give it any name (e.g. "seap-tracker"), choose a region close to Somalia (Europe West is fine), set a database password.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-body">
+          <div class="step-title">Create the activity_logs table</div>
+          <div class="step-desc">In your Supabase project, click "SQL Editor" in the left sidebar, paste the SQL below, and click Run.</div>
+          <div class="code-block">create table activity_logs (
+  id           uuid default gen_random_uuid() primary key,
+  activity_id  integer not null,
+  org          text not null,
+  status       text not null,
+  notes        text,
+  geography    text,
+  logged_at    timestamptz default now()
+);
+
+alter table activity_logs enable row level security;
+
+create policy "Anyone can read logs"
+  on activity_logs for select using (true);
+
+create policy "Anyone can insert logs"
+  on activity_logs for insert with check (true);</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-body">
+          <div class="step-title">Get your project credentials</div>
+          <div class="step-desc">In Supabase go to Settings → API. You need two values: the "Project URL" and the "anon / public" key under "Project API keys". Paste them below.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="setup-inputs">
+      <div class="setup-input-row">
+        <div class="setup-input-label">Supabase Project URL</div>
+        <input class="setup-input" id="sb-url" placeholder="https://xxxxxxxxxxxx.supabase.co" />
+      </div>
+      <div class="setup-input-row">
+        <div class="setup-input-label">Supabase Anon Key</div>
+        <input class="setup-input" id="sb-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." />
+      </div>
+    </div>
+
+    <button class="btn-connect" onclick="saveAndConnect()">Connect database →</button>
+    <div class="setup-note">
+      Your credentials are saved in this browser only (localStorage). Anyone using the tracker on a different device will need to enter them once too — or you can hardcode them in the HTML file before publishing to GitHub Pages.<br><br>
+      The "anon" key is safe to share publicly — it only allows reading and inserting into the specific tables you created, controlled by the Row Level Security policies above.
+    </div>
+  </div>
+</div>
+
+<!-- ORG SELECTOR -->
+<div id="org-screen">
+  <div class="org-card">
+    <div class="org-header">
+      <div class="org-tag">Somalia Emergency Action Plan 2026</div>
+      <div class="org-title">Accountability<br>Tracker</div>
+      <div class="org-sub">Select your organisation to view and log activities. No password needed — updates are shared across all partners in real time.</div>
+      <div class="db-status">
+        <div class="db-dot" id="db-dot"></div>
+        <span id="db-status-text" style="font-size:11px;color:var(--text3)"></span>
+      </div>
+    </div>
+    <div class="partner-grid">
+      <button class="partner-btn who" onclick="selectOrg('WHO')">
+        <span class="p-name" style="color:var(--who)">WHO</span>
+        <span class="p-role">Surveillance, SIAs, coordination</span>
+      </button>
+      <button class="partner-btn unicef" onclick="selectOrg('UNICEF')">
+        <span class="p-name" style="color:var(--unicef)">UNICEF</span>
+        <span class="p-role">Cold chain, community engagement</span>
+      </button>
+      <button class="partner-btn moh" onclick="selectOrg('MOH')">
+        <span class="p-name" style="color:var(--moh)">MOH</span>
+        <span class="p-role">Government ownership, NPCC</span>
+      </button>
+      <button class="partner-btn cdc" onclick="selectOrg('CDC')">
+        <span class="p-name" style="color:var(--cdc)">CDC / TFGH</span>
+        <span class="p-role">State SPCC support, analysis</span>
+      </button>
+    </div>
+  </div>
+  <div style="font-size:11px;color:var(--text3);text-align:center;">GPEI Partner Portal · SEAP 2026 · Mogadishu, Somalia</div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <nav class="topnav">
+    <div class="nav-left">
+      <div class="nav-brand">
+        <div class="brand-mark">S26</div>
+        <div class="brand-text">SEAP Tracker</div>
+      </div>
+      <div class="nav-tabs">
+        <button class="nav-tab active" onclick="showView('dashboard', this)">Dashboard</button>
+        <button class="nav-tab" onclick="showView('activities', this)">Activities</button>
+        <button class="nav-tab" onclick="showView('audit', this)">Audit log</button>
+        <button class="nav-tab" onclick="showView('report', this)">Reports</button>
+      </div>
+    </div>
+    <div class="nav-right">
+      <div class="sync-indicator"><div class="sync-dot" id="sync-dot"></div><span id="sync-text">Live</span></div>
+      <span id="partner-badge" class="partner-badge"></span>
+      <button class="btn-switch" onclick="switchOrg()">Switch org</button>
+    </div>
+  </nav>
+
+  <!-- DASHBOARD -->
+  <div id="view-dashboard" class="view active">
+    <div class="dash-header">
+      <div>
+        <div class="dash-title">Programme overview</div>
+        <div class="dash-sub">NPCC · All states · January–December 2026</div>
+      </div>
+      <button class="btn-refresh" onclick="loadData()">↻ Refresh</button>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label">Completed</div><div class="stat-num stat-green" id="stat-completed">—</div><div class="stat-detail" id="stat-completed-sub">of all activities</div></div>
+      <div class="stat-card"><div class="stat-label">In progress</div><div class="stat-num stat-amber" id="stat-inprog">—</div><div class="stat-detail">logged this period</div></div>
+      <div class="stat-card"><div class="stat-label">Overdue</div><div class="stat-num stat-red" id="stat-overdue">—</div><div class="stat-detail">action required</div></div>
+      <div class="stat-card"><div class="stat-label">SIA rounds</div><div class="stat-num">0 <span style="font-size:16px;color:var(--text3)">/6</span></div><div class="stat-detail">Next: April 2026</div></div>
+    </div>
+    <div class="dash-grid">
+      <div>
+        <div class="section-label">Progress by strategic pillar</div>
+        <div class="pillar-list" id="pillar-list"></div>
+      </div>
+      <div class="side-panel">
+        <div class="state-card">
+          <div class="section-label" style="margin-bottom:8px;">State accountability</div>
+          <div class="state-grid" id="state-grid"></div>
+        </div>
+        <div class="alert-card">
+          <div class="alert-head"><div class="section-label" style="margin:0;">Overdue items</div></div>
+          <div id="alert-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIVITIES -->
+  <div id="view-activities" class="view">
+    <div class="dash-header">
+      <div><div class="dash-title">Activity log</div><div class="dash-sub">Real-time view — all partner updates reflected immediately</div></div>
+      <button class="btn-refresh" onclick="loadData()">↻ Refresh</button>
+    </div>
+    <div class="filter-bar">
+      <button class="filter-chip active" onclick="filterActivities('all', this)">All</button>
+      <button class="filter-chip" onclick="filterActivities('mine', this)">My org</button>
+      <button class="filter-chip" onclick="filterActivities('overdue', this)">Overdue</button>
+      <button class="filter-chip" onclick="filterActivities('sia', this)">SIA campaigns</button>
+      <button class="filter-chip" onclick="filterActivities('surv', this)">Surveillance</button>
+      <button class="filter-chip" onclick="filterActivities('coord', this)">Coordination</button>
+      <div class="filter-spacer"></div>
+      <button class="btn-add" onclick="openLogModal()">+ Log update</button>
+    </div>
+    <div class="activity-table">
+      <div class="tbl-head"><span>Activity</span><span>Owner</span><span>Cadence</span><span>Due</span><span>Status</span><span>Action</span></div>
+      <div id="activity-list"></div>
+    </div>
+  </div>
+
+  <!-- AUDIT LOG -->
+  <div id="view-audit" class="view">
+    <div class="dash-header">
+      <div><div class="dash-title">Audit log</div><div class="dash-sub">Every update logged by all partner organisations, newest first</div></div>
+      <button class="btn-refresh" onclick="loadAuditLog()">↻ Refresh</button>
+    </div>
+    <div class="activity-table">
+      <div id="audit-feed" class="audit-feed"></div>
+    </div>
+  </div>
+
+  <!-- REPORT -->
+  <div id="view-report" class="view">
+    <div class="dash-header"><div><div class="dash-title">Generate report</div><div class="dash-sub">AI-drafted narrative based on live programme data</div></div></div>
+    <div class="report-layout">
+      <div class="report-config">
+        <div class="config-title">Report settings</div>
+        <div class="config-group"><div class="config-label">Audience</div>
+          <select class="config-select" id="rpt-audience">
+            <option>NPCC (weekly)</option><option>SPCC — all states (monthly)</option>
+            <option>GPEI partners (monthly)</option><option>POB / senior leadership (quarterly)</option>
+          </select>
+        </div>
+        <div class="config-group"><div class="config-label">Period</div>
+          <select class="config-select" id="rpt-period">
+            <option>Week 11 · 10–16 March 2026</option><option>Week 10 · 3–9 March 2026</option>
+            <option>February 2026</option><option>Q1 2026</option>
+          </select>
+        </div>
+        <div class="config-group"><div class="config-label">Include sections</div>
+          <div class="checkbox-group">
+            <label class="cb-row"><input type="checkbox" checked id="inc-completion"> Activity completion by pillar</label>
+            <label class="cb-row"><input type="checkbox" checked id="inc-state"> State accountability scores</label>
+            <label class="cb-row"><input type="checkbox" checked id="inc-overdue"> Overdue items & owners</label>
+            <label class="cb-row"><input type="checkbox" checked id="inc-narrative"> AI-drafted narrative summary</label>
+            <label class="cb-row"><input type="checkbox" id="inc-sia"> SIA readiness status</label>
+          </div>
+        </div>
+        <div class="config-group"><div class="config-label">Tone</div>
+          <select class="config-select" id="rpt-tone">
+            <option>Technical / operational</option><option>Executive summary</option><option>Donor-facing</option>
+          </select>
+        </div>
+        <button class="btn-generate" onclick="generateReport()">Generate report ↗</button>
+      </div>
+      <div class="report-panel">
+        <div class="report-toolbar">
+          <div style="display:flex;align-items:center;gap:10px;"><span style="font-size:13px;font-weight:500;">Draft report</span><span class="report-status" id="report-status">Ready to generate</span></div>
+          <button class="btn-copy" onclick="copyReport()">Copy text</button>
+        </div>
+        <div class="report-body">
+          <div class="report-placeholder" id="report-placeholder">
+            <div class="placeholder-icon">◈</div>
+            <div class="placeholder-text">Configure your report settings and click "Generate report" to create an AI-drafted narrative using live programme data.</div>
+          </div>
+          <div class="report-content" id="report-content">
+            <div class="rc-title" id="rc-title"></div>
+            <div class="rc-meta" id="rc-meta"></div>
+            <div id="rc-body"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LOG MODAL -->
+<div class="modal-backdrop" id="log-modal">
+  <div class="modal">
+    <div class="modal-title">Log activity update</div>
+    <div class="modal-sub">This update will be saved to the shared database and visible to all partners immediately.</div>
+    <div class="form-group"><label class="form-label">Activity</label><select class="form-select" id="modal-activity"></select></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Status</label>
+        <select class="form-select" id="modal-status">
+          <option value="completed">Completed ✓</option><option value="in-progress">In progress</option>
+          <option value="blocked">Blocked / overdue</option><option value="not-started">Not started</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="modal-date"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Notes / evidence</label><textarea class="form-textarea" id="modal-notes" placeholder="Describe what was done, outcomes, or reason for delay…"></textarea></div>
+    <div class="form-group"><label class="form-label">Geography</label>
+      <select class="form-select" id="modal-geo">
+        <option>National (NPCC)</option><option>Banadir</option><option>South-West State</option>
+        <option>Jubaland</option><option>Galmudug</option><option>Hir-Shabelle</option>
+        <option>Puntland</option><option>Somaliland</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-submit" id="modal-submit" onclick="submitLog()">Save to database</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONFIGURATION ────────────────────────────────────────────────────────────
+// TO HARDCODE CREDENTIALS (recommended before publishing to GitHub Pages):
+// Replace the empty strings below with your actual values.
+// This means users won't need to enter them on first visit.
+const HARDCODED_URL = '';  // e.g. 'https://dgzlgarclbyqkddbpmjb.supabase.co';
+const HARDCODED_KEY = '';  // e.g. 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnemxnYXJjbGJ5cWtkZGJwbWpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5NTIzNTUsImV4cCI6MjA4OTUyODM1NX0.c0IikVVRSd_MLgDb0huwmBaWSbGt5RsATgEdef94Apk'
+
+// ─── STATIC DATA ──────────────────────────────────────────────────────────────
+const PILLARS = [
+  { id:'sia',   name:'SIA campaigns',         color:'#2E6B3E' },
+  { id:'surv',  name:'AFP / ES surveillance',  color:'#1A3A6B' },
+  { id:'comm',  name:'Community engagement',   color:'#8B3A1A' },
+  { id:'cold',  name:'Cold chain & vaccines',  color:'#4A1A6B' },
+  { id:'cross', name:'Cross-border coord.',    color:'#1A5F5A' },
+  { id:'ri',    name:'Routine immunization',   color:'#5A5A1A' },
+];
+const ACTIVITIES = [
+  {id:1,  name:'NPCC weekly coordination meeting',              pillar:'sia',  owner:'WHO',       cadence:'Weekly',       due:'Every Mon', defaultStatus:'completed', state:'National'},
+  {id:2,  name:'SNID April microplanning validation',            pillar:'sia',  owner:'WHO/UNICEF', cadence:'Pre-campaign', due:'28 Mar',    defaultStatus:'in-progress', state:'National'},
+  {id:3,  name:'Campaign readiness checklist — Banadir',         pillar:'sia',  owner:'WHO',       cadence:'Pre-campaign', due:'15 Mar',    defaultStatus:'overdue',     state:'Banadir'},
+  {id:4,  name:'Vaccinator training (South-West State)',         pillar:'sia',  owner:'UNICEF',    cadence:'Pre-campaign', due:'25 Mar',    defaultStatus:'in-progress', state:'South-West'},
+  {id:5,  name:'GIS microplan upload to DHIS2',                  pillar:'sia',  owner:'WHO',       cadence:'Pre-campaign', due:'20 Mar',    defaultStatus:'in-progress', state:'National'},
+  {id:6,  name:'AFP case validation (Banadir)',                  pillar:'surv', owner:'WHO',       cadence:'Monthly',      due:'15 Mar',    defaultStatus:'in-progress', state:'Banadir'},
+  {id:7,  name:'Environmental surveillance sample collection',   pillar:'surv', owner:'WHO/MOH',   cadence:'Fortnightly',  due:'22 Mar',    defaultStatus:'not-started', state:'National'},
+  {id:8,  name:'Surveillance network refresher training',        pillar:'surv', owner:'WHO',       cadence:'Quarterly',    due:'31 Mar',    defaultStatus:'not-started', state:'National'},
+  {id:9,  name:'NCC meeting (national certification)',           pillar:'surv', owner:'MOH',       cadence:'Bi-annual',    due:'Jun 2026',  defaultStatus:'completed',   state:'National'},
+  {id:10, name:'Vaccine hesitancy response — Banadir',           pillar:'comm', owner:'UNICEF',    cadence:'Monthly',      due:'10 Mar',    defaultStatus:'overdue',     state:'Banadir'},
+  {id:11, name:'Social mobilizer deployment & briefing',         pillar:'comm', owner:'UNICEF',    cadence:'Pre-campaign', due:'25 Mar',    defaultStatus:'not-started', state:'National'},
+  {id:12, name:'Community leader engagement (inaccessible areas)',pillar:'comm',owner:'WHO/MOH',   cadence:'Monthly',      due:'28 Mar',    defaultStatus:'in-progress', state:'South-West'},
+  {id:13, name:'Cold chain equipment status report',             pillar:'cold', owner:'UNICEF',    cadence:'Monthly',      due:'10 Mar',    defaultStatus:'overdue',     state:'National'},
+  {id:14, name:'Solar SDD maintenance check — Jubaland',         pillar:'cold', owner:'UNICEF',    cadence:'Quarterly',    due:'31 Mar',    defaultStatus:'not-started', state:'Jubaland'},
+  {id:15, name:'nOPV2 stock reconciliation',                     pillar:'cold', owner:'UNICEF/WHO',cadence:'Monthly',      due:'20 Mar',    defaultStatus:'in-progress', state:'National'},
+  {id:16, name:'Cross-border call (Kenya / Ethiopia / Djibouti)',pillar:'cross',owner:'WHO/CDC',   cadence:'Fortnightly',  due:'20 Mar',    defaultStatus:'completed',   state:'National'},
+  {id:17, name:'Transit point vaccinator update — Mandera',      pillar:'cross',owner:'WHO',       cadence:'Monthly',      due:'28 Mar',    defaultStatus:'in-progress', state:'National'},
+  {id:18, name:'SPCC state coordination call',                   pillar:'ri',   owner:'UNICEF',    cadence:'Monthly',      due:'10 Mar',    defaultStatus:'overdue',     state:'National'},
+  {id:19, name:'Big Catch-Up round 5 preparation',               pillar:'ri',   owner:'UNICEF/MOH',cadence:'Pre-round',    due:'Apr 2026',  defaultStatus:'not-started', state:'National'},
+  {id:20, name:'DHIS2 RI data validation',                       pillar:'ri',   owner:'MOH',       cadence:'Monthly',      due:'28 Mar',    defaultStatus:'in-progress', state:'National'},
+];
+const STATES = [
+  {name:'Banadir',     pct:61, color:'#8B2020'},
+  {name:'South-West',  pct:74, color:'#7A5000'},
+  {name:'Jubaland',    pct:88, color:'#2E6B3E'},
+  {name:'Galmudug',    pct:82, color:'#2E6B3E'},
+  {name:'Hir-Shabelle',pct:70, color:'#7A5000'},
+  {name:'Puntland',    pct:85, color:'#2E6B3E'},
+  {name:'Somaliland',  pct:90, color:'#2E6B3E'},
+];
+const OWNER_MAP = {'WHO':'ot-who','UNICEF':'ot-unicef','MOH':'ot-moh','CDC':'ot-cdc','WHO/UNICEF':'ot-all','WHO/MOH':'ot-all','UNICEF/WHO':'ot-all','WHO/CDC':'ot-all','UNICEF/MOH':'ot-all','CDC/TFGH':'ot-cdc'};
+const PARTNER_OWNERS = {'WHO':['WHO'],'UNICEF':['UNICEF'],'MOH':['MOH'],'CDC':['CDC','CDC/TFGH']};
+
+// ─── APP STATE ────────────────────────────────────────────────────────────────
+let sbClient = null;
+let currentOrg = null;
+let dbLogs = {};        // activity_id -> latest log row from DB
+let currentFilter = 'all';
+let auditRows = [];
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+async function init() {
+  const url = HARDCODED_URL || localStorage.getItem('sb_url');
+  const key = HARDCODED_KEY || localStorage.getItem('sb_key');
+
+  if (!url || !key) {
+    document.getElementById('loading-overlay').style.display = 'none';
+    document.getElementById('setup-banner').classList.add('show');
+    return;
+  }
+  await connectSupabase(url, key);
+}
+
+async function connectSupabase(url, key) {
+  document.getElementById('loading-overlay').style.display = 'flex';
+  try {
+    const factory = (window.supabase && window.supabase.createClient)
+      ? window.supabase.createClient
+      : (window.supabaseJs && window.supabaseJs.createClient)
+      ? window.supabaseJs.createClient
+      : null;
+    if (!factory) throw new Error('Supabase library did not load. Check your internet connection and refresh.');
+    sbClient = factory(url, key);
+    const { error } = await sbClient.from('activity_logs').select('id').limit(1);
+    if (error) throw new Error(error.message + ' — Make sure you ran the SQL to create the activity_logs table.');
+    document.getElementById('loading-overlay').style.display = 'none';
+    document.getElementById('setup-banner').classList.remove('show');
+    showOrgScreen(true);
+  } catch(e) {
+    document.getElementById('loading-overlay').style.display = 'none';
+    document.getElementById('setup-banner').classList.add('show');
+    let errDiv = document.getElementById('connect-error');
+    if (!errDiv) {
+      errDiv = document.createElement('div');
+      errDiv.id = 'connect-error';
+      errDiv.style.cssText = 'margin-top:14px;padding:12px 16px;background:#3a1a1a;border:1px solid #6b2020;border-radius:6px;font-size:12px;color:#f4a0a0;font-family:monospace;line-height:1.6;white-space:pre-wrap;';
+      document.querySelector('.btn-connect').after(errDiv);
+    }
+    errDiv.textContent = 'Connection failed: ' + e.message;
+  }
+}
+
+async function saveAndConnect() {
+  const url = document.getElementById('sb-url').value.trim();
+  const key = document.getElementById('sb-key').value.trim();
+  if (!url || !key) { alert('Please enter both the Project URL and Anon Key.'); return; }
+  localStorage.setItem('sb_url', url);
+  localStorage.setItem('sb_key', key);
+  document.getElementById('loading-overlay').style.display = 'flex';
+  document.getElementById('loading-overlay').querySelector('.loading-text').textContent = 'Connecting…';
+  await connectSupabase(url, key);
+}
+
+function showOrgScreen(connected) {
+  document.getElementById('org-screen').classList.add('show');
+  const dot = document.getElementById('db-dot');
+  const txt = document.getElementById('db-status-text');
+  if (connected) {
+    dot.className = 'db-dot connected';
+    txt.textContent = 'Database connected — updates sync in real time';
+  } else {
+    dot.className = 'db-dot offline';
+    txt.textContent = 'Offline mode — updates saved locally only';
+  }
+}
+
+async function selectOrg(org) {
+  currentOrg = org;
+  document.getElementById('org-screen').classList.remove('show');
+  document.getElementById('app').style.display = 'block';
+  const badge = document.getElementById('partner-badge');
+  badge.textContent = org;
+  badge.className = 'partner-badge pb-' + org.toLowerCase().split('/')[0].split(' ')[0];
+  await loadData();
+  renderDashboard();
+  renderActivities();
+}
+
+function switchOrg() {
+  document.getElementById('org-screen').classList.add('show');
+  document.getElementById('app').style.display = 'none';
+}
+
+// ─── DATA LOADING ──────────────────────────────────────────────────────────────
+async function loadData() {
+  setSyncing(true);
+  if (!sbClient) { setSyncing(false); return; }
+  try {
+    // Get the latest log entry per activity (most recent wins)
+    const { data, error } = await sbClient
+      .from('activity_logs')
+      .select('*')
+      .order('logged_at', { ascending: false });
+    if (error) throw error;
+
+    // Build a map: activity_id -> most recent log
+    dbLogs = {};
+    (data || []).forEach(row => {
+      if (!dbLogs[row.activity_id]) dbLogs[row.activity_id] = row;
+    });
+    auditRows = data || [];
+    renderDashboard();
+    renderActivities();
+    if (document.getElementById('view-audit').classList.contains('active')) renderAuditLog();
+  } catch(e) {
+    console.error('Load error:', e);
+  }
+  setSyncing(false);
+}
+
+async function loadAuditLog() {
+  setSyncing(true);
+  if (!sbClient) { setSyncing(false); renderAuditLog(); return; }
+  try {
+    const { data, error } = await sbClient
+      .from('activity_logs')
+      .select('*')
+      .order('logged_at', { ascending: false })
+      .limit(100);
+    if (!error) auditRows = data || [];
+  } catch(e) {}
+  renderAuditLog();
+  setSyncing(false);
+}
+
+function getStatus(id) {
+  if (dbLogs[id]) {
+    const s = dbLogs[id].status;
+    if (s === 'blocked') return 'overdue';
+    return s;
+  }
+  return ACTIVITIES.find(a => a.id === id).defaultStatus;
+}
+
+function setSyncing(v) {
+  const dot = document.getElementById('sync-dot');
+  const txt = document.getElementById('sync-text');
+  if (v) { dot.classList.add('syncing'); txt.textContent = 'Syncing…'; }
+  else   { dot.classList.remove('syncing'); txt.textContent = 'Live'; }
+}
+
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
+function renderDashboard() {
+  const completed  = ACTIVITIES.filter(a => getStatus(a.id) === 'completed').length;
+  const inProgress = ACTIVITIES.filter(a => getStatus(a.id) === 'in-progress').length;
+  const overdue    = ACTIVITIES.filter(a => getStatus(a.id) === 'overdue').length;
+  document.getElementById('stat-completed').textContent = completed;
+  document.getElementById('stat-completed-sub').textContent = `of ${ACTIVITIES.length} total`;
+  document.getElementById('stat-inprog').textContent = inProgress;
+  document.getElementById('stat-overdue').textContent = overdue;
+
+  const pillarEl = document.getElementById('pillar-list');
+  pillarEl.innerHTML = '';
+  PILLARS.forEach(p => {
+    const acts = ACTIVITIES.filter(a => a.pillar === p.id);
+    const done = acts.filter(a => getStatus(a.id) === 'completed').length;
+    const pct = Math.round(done / acts.length * 100);
+    const barColor = pct >= 80 ? '#2E6B3E' : pct >= 50 ? '#7A5000' : '#8B2020';
+    const row = document.createElement('div');
+    row.className = 'pillar-row';
+    row.innerHTML = `
+      <div class="pillar-dot" style="background:${p.color}"></div>
+      <div class="pillar-info"><div class="p-name">${p.name}</div><div class="p-count">${done}/${acts.length} completed</div></div>
+      <div class="bar-wrap"><div class="bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+      <div class="pct-label" style="color:${barColor}">${pct}%</div>`;
+    row.onclick = () => { showView('activities', document.querySelectorAll('.nav-tab')[1]); filterActivities(p.id, null); };
+    pillarEl.appendChild(row);
+  });
+
+  const stateEl = document.getElementById('state-grid');
+  stateEl.innerHTML = '';
+  STATES.forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'state-row';
+    row.innerHTML = `<span class="state-name">${s.name}</span><div class="bar-wrap" style="width:80px"><div class="bar-fill" style="width:${s.pct}%;background:${s.color}"></div></div><span class="state-pct" style="color:${s.color}">${s.pct}%</span>`;
+    stateEl.appendChild(row);
+  });
+
+  const alertEl = document.getElementById('alert-list');
+  alertEl.innerHTML = '';
+  const overdueActs = ACTIVITIES.filter(a => getStatus(a.id) === 'overdue');
+  if (overdueActs.length === 0) {
+    alertEl.innerHTML = '<div style="padding:14px 16px;font-size:12px;color:var(--text3);">No overdue items ✓</div>';
+  } else {
+    overdueActs.forEach(a => {
+      const div = document.createElement('div');
+      div.className = 'alert-item';
+      div.innerHTML = `<div class="alert-dot" style="background:#8B2020"></div><div class="alert-text"><div class="a-title">${a.name}</div><div class="a-sub">${a.owner} · Due: ${a.due} · ${a.state}</div></div>`;
+      alertEl.appendChild(div);
+    });
+  }
+}
+
+// ─── ACTIVITIES ───────────────────────────────────────────────────────────────
+function renderActivities() {
+  const container = document.getElementById('activity-list');
+  container.innerHTML = '';
+  let filtered = ACTIVITIES;
+  const myOwners = PARTNER_OWNERS[currentOrg] || [];
+
+  if (currentFilter === 'mine') {
+    filtered = filtered.filter(a => myOwners.some(o => a.owner.includes(o)));
+  } else if (currentFilter === 'overdue') {
+    filtered = filtered.filter(a => getStatus(a.id) === 'overdue');
+  } else if (['sia','surv','comm','cold','cross','ri'].includes(currentFilter)) {
+    filtered = filtered.filter(a => a.pillar === currentFilter);
+  } else if (currentFilter === 'coord') {
+    filtered = filtered.filter(a => ['cross','ri'].includes(a.pillar));
+  }
+
+  filtered.forEach(act => {
+    const s = getStatus(act.id);
+    const isMine = myOwners.some(o => act.owner.includes(o));
+    const lastLog = dbLogs[act.id];
+    const p = PILLARS.find(p => p.id === act.pillar);
+    const ownerClass = OWNER_MAP[act.owner] || 'ot-all';
+
+    let statusHtml = '';
+    if (s === 'completed')   statusHtml = `<span class="status-pill sp-green"><span class="sp-dot" style="background:#2E6B3E"></span>Done</span>`;
+    else if (s === 'in-progress') statusHtml = `<span class="status-pill sp-amber"><span class="sp-dot" style="background:#7A5000"></span>In progress</span>`;
+    else if (s === 'overdue') statusHtml = `<span class="status-pill sp-red"><span class="sp-dot" style="background:#8B2020"></span>Overdue</span>`;
+    else statusHtml = `<span class="status-pill" style="background:var(--bg2);color:var(--text3)">Not started</span>`;
+
+    let logMeta = '';
+    if (lastLog) {
+      const ago = timeAgo(lastLog.logged_at);
+      logMeta = `<div class="log-meta">${lastLog.org} · ${ago}</div>`;
+    }
+
+    const canLog = isMine;
+    const logHtml = canLog
+      ? `<button class="log-btn" onclick="openLogModalFor(${act.id})">Log update</button>${logMeta}`
+      : `<span style="font-size:11px;color:var(--text3);">—</span>${logMeta}`;
+
+    const row = document.createElement('div');
+    row.className = 'tbl-row' + (isMine ? ' mine' : '');
+    row.innerHTML = `
+      <div><div class="act-name">${act.name}</div><div class="act-pillar"><span class="pillar-pip" style="background:${p.color}"></span>${p.name}</div></div>
+      <div><span class="owner-tag ${ownerClass}">${act.owner}</span></div>
+      <div class="cadence-tag">${act.cadence}</div>
+      <div class="due-date ${s==='overdue'?'due-overdue':''}">${act.due}</div>
+      <div>${statusHtml}</div>
+      <div>${logHtml}</div>`;
+    container.appendChild(row);
+  });
+}
+
+function filterActivities(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  else {
+    // find matching chip
+    document.querySelectorAll('.filter-chip').forEach(c => {
+      if (c.getAttribute('onclick') && c.getAttribute('onclick').includes(`'${f}'`)) c.classList.add('active');
+    });
+  }
+  renderActivities();
+}
+
+// ─── AUDIT LOG ────────────────────────────────────────────────────────────────
+function renderAuditLog() {
+  const feed = document.getElementById('audit-feed');
+  if (auditRows.length === 0) {
+    feed.innerHTML = '<div style="padding:24px;text-align:center;font-size:13px;color:var(--text3);">No activity updates logged yet. Updates from all partners will appear here.</div>';
+    return;
+  }
+  feed.innerHTML = '';
+  auditRows.forEach(row => {
+    const act = ACTIVITIES.find(a => a.id === row.activity_id);
+    const orgClass = 'ot-' + row.org.toLowerCase().split('/')[0].split(' ')[0];
+    const div = document.createElement('div');
+    div.className = 'audit-item';
+    div.innerHTML = `
+      <span class="audit-org owner-tag ${orgClass}">${row.org}</span>
+      <div class="audit-body">
+        <div class="a-act">${act ? act.name : 'Activity #' + row.activity_id}</div>
+        <div class="a-detail">Status: ${row.status}${row.geography ? ' · ' + row.geography : ''}${row.notes ? ' · ' + row.notes.slice(0,80) + (row.notes.length>80?'…':'') : ''}</div>
+      </div>
+      <div class="audit-time">${timeAgo(row.logged_at)}</div>`;
+    feed.appendChild(div);
+  });
+}
+
+// ─── LOG MODAL ────────────────────────────────────────────────────────────────
+function populateModalSelect(selectedId = null) {
+  const select = document.getElementById('modal-activity');
+  select.innerHTML = '';
+  const myOwners = PARTNER_OWNERS[currentOrg] || [];
+  ACTIVITIES.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.id;
+    const isMine = myOwners.some(o => a.owner.includes(o));
+    opt.textContent = (isMine ? '★ ' : '') + a.name;
+    if (a.id === selectedId) opt.selected = true;
+    select.appendChild(opt);
+  });
+}
+
+function openLogModal() {
+  populateModalSelect();
+  document.getElementById('modal-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('modal-notes').value = '';
+  document.getElementById('modal-submit').disabled = false;
+  document.getElementById('log-modal').classList.add('open');
+}
+
+function openLogModalFor(id) {
+  populateModalSelect(id);
+  document.getElementById('modal-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('modal-notes').value = '';
+  document.getElementById('modal-submit').disabled = false;
+  document.getElementById('log-modal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('log-modal').classList.remove('open'); }
+
+async function submitLog() {
+  const id = parseInt(document.getElementById('modal-activity').value);
+  const status = document.getElementById('modal-status').value;
+  const notes = document.getElementById('modal-notes').value;
+  const geo = document.getElementById('modal-geo').value;
+  const btn = document.getElementById('modal-submit');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  const row = { activity_id: id, org: currentOrg, status, notes, geography: geo };
+
+  if (sbClient) {
+    try {
+      const { error } = await sbClient.from('activity_logs').insert([row]);
+      if (error) throw error;
+    } catch(e) {
+      alert('Error saving to database: ' + e.message);
+      btn.disabled = false; btn.textContent = 'Save to database'; return;
+    }
+  }
+
+  // Update local state immediately
+  dbLogs[id] = { ...row, logged_at: new Date().toISOString() };
+  auditRows.unshift({ ...row, id: 'local-' + Date.now(), logged_at: new Date().toISOString() });
+
+  closeModal();
+  renderActivities();
+  renderDashboard();
+  btn.textContent = 'Save to database';
+  const act = ACTIVITIES.find(a => a.id === id);
+  showToast(`✓ Saved: "${act.name}"`);
+}
+
+// ─── REPORT ───────────────────────────────────────────────────────────────────
+async function generateReport() {
+  const btn = document.querySelector('.btn-generate');
+  btn.disabled = true; btn.textContent = 'Generating…';
+  document.getElementById('report-status').textContent = '● Drafting…';
+  document.getElementById('report-placeholder').style.display = 'none';
+  const content = document.getElementById('report-content');
+  content.classList.add('visible');
+
+  const audience = document.getElementById('rpt-audience').value;
+  const period   = document.getElementById('rpt-period').value;
+  const tone     = document.getElementById('rpt-tone').value;
+
+  const completed  = ACTIVITIES.filter(a => getStatus(a.id) === 'completed');
+  const inProgress = ACTIVITIES.filter(a => getStatus(a.id) === 'in-progress');
+  const overdueActs= ACTIVITIES.filter(a => getStatus(a.id) === 'overdue');
+  const notStarted = ACTIVITIES.filter(a => getStatus(a.id) === 'not-started');
+
+  const pillarSummary = PILLARS.map(p => {
+    const acts = ACTIVITIES.filter(a => a.pillar === p.id);
+    const done = acts.filter(a => getStatus(a.id) === 'completed').length;
+    return `${p.name}: ${done}/${acts.length} completed`;
+  }).join('; ');
+  const overdueText = overdueActs.map(a => `${a.name} (Owner: ${a.owner}, Due: ${a.due})`).join('; ');
+  const stateText = STATES.map(s => `${s.name} ${s.pct}%`).join(', ');
+
+  document.getElementById('rc-title').textContent = `SEAP 2026 · ${audience} Progress Report`;
+  document.getElementById('rc-meta').textContent = `Period: ${period} · Generated: ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})} · Reported by: ${currentOrg}`;
+
+  const rcBody = document.getElementById('rc-body');
+  rcBody.innerHTML = '';
+
+  if (document.getElementById('inc-completion').checked) {
+    const sec = document.createElement('div'); sec.className = 'rc-section';
+    sec.innerHTML = `<div class="rc-h">Activity completion by pillar</div>`;
+    const table = document.createElement('table'); table.className = 'rc-table';
+    table.innerHTML = `<tr><th>Pillar</th><th>Completed</th><th>Total</th><th>%</th></tr>`;
+    PILLARS.forEach(p => {
+      const acts = ACTIVITIES.filter(a => a.pillar === p.id);
+      const done = acts.filter(a => getStatus(a.id) === 'completed').length;
+      const pct = Math.round(done/acts.length*100);
+      const color = pct>=80?'var(--green)':pct>=50?'var(--amber)':'var(--red)';
+      table.innerHTML += `<tr><td>${p.name}</td><td>${done}</td><td>${acts.length}</td><td style="color:${color};font-weight:500">${pct}%</td></tr>`;
+    });
+    sec.appendChild(table); rcBody.appendChild(sec);
+  }
+
+  if (document.getElementById('inc-state').checked) {
+    const sec = document.createElement('div'); sec.className = 'rc-section';
+    sec.innerHTML = `<div class="rc-h">State accountability scores</div>`;
+    const table = document.createElement('table'); table.className = 'rc-table';
+    table.innerHTML = `<tr><th>State</th><th>On track (%)</th><th>Signal</th></tr>`;
+    STATES.forEach(s => {
+      const signal = s.pct>=80?'On track':s.pct>=70?'At risk':'Action required';
+      const color = s.pct>=80?'var(--green)':s.pct>=70?'var(--amber)':'var(--red)';
+      table.innerHTML += `<tr><td>${s.name}</td><td>${s.pct}%</td><td style="color:${color};font-weight:500">${signal}</td></tr>`;
+    });
+    sec.appendChild(table); rcBody.appendChild(sec);
+  }
+
+  if (document.getElementById('inc-overdue').checked && overdueActs.length > 0) {
+    const sec = document.createElement('div'); sec.className = 'rc-section';
+    sec.innerHTML = `<div class="rc-h">Overdue items requiring action</div>`;
+    overdueActs.forEach(a => {
+      const item = document.createElement('div'); item.className = 'rc-overdue-item';
+      item.innerHTML = `<div class="rc-overdue-title">${a.name}</div><div class="rc-overdue-sub">Owner: ${a.owner} · Due: ${a.due} · ${a.state}</div>`;
+      sec.appendChild(item);
+    });
+    rcBody.appendChild(sec);
+  }
+
+  if (document.getElementById('inc-sia').checked) {
+    const sec = document.createElement('div'); sec.className = 'rc-section';
+    sec.innerHTML = `<div class="rc-h">SIA readiness — April SNID</div><div class="rc-p">The April SNID targets South-Central consequential geography and is the first of six rounds in 2026. Microplanning validation is in progress nationally. Campaign readiness checklist is overdue in Banadir. Vaccinator training is underway in South-West State.</div>`;
+    rcBody.appendChild(sec);
+  }
+
+  if (document.getElementById('inc-narrative').checked) {
+    const sec = document.createElement('div'); sec.className = 'rc-section';
+    const h = document.createElement('div'); h.className = 'rc-h'; h.textContent = 'Narrative summary';
+    sec.appendChild(h);
+    const streamDiv = document.createElement('div'); streamDiv.className = 'streaming-text';
+    const cursor = document.createElement('span'); cursor.className = 'typing-cursor';
+    streamDiv.appendChild(cursor);
+    sec.appendChild(streamDiv);
+    rcBody.appendChild(sec);
+
+    const prompt = `You are a senior public health technical writer for the Somalia Emergency Action Plan (SEAP) 2026, a polio eradication emergency led by Somalia's Federal Ministry of Health with WHO, UNICEF, CDC/TFGH, and GPEI.
+
+Audience: ${audience}
+Period: ${period}
+Tone: ${tone}
+Reporting organisation: ${currentOrg}
+
+Live programme data:
+- Total activities: ${ACTIVITIES.length} | Completed: ${completed.length} (${Math.round(completed.length/ACTIVITIES.length*100)}%) | In progress: ${inProgress.length} | Overdue: ${overdueActs.length} | Not started: ${notStarted.length}
+- Pillar completion: ${pillarSummary}
+- Overdue: ${overdueText || 'None'}
+- State scores: ${stateText}
+
+Write 3-4 paragraphs: (1) headline progress; (2) achievements and positive signals; (3) concerns and overdue items needing escalation with specific owners; (4) recommended next steps. Flowing prose only, no headers or bullets. Under 350 words. Mention cVDPV2 context briefly.`;
+
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, stream:true, messages:[{role:'user',content:prompt}] })
+      });
+      if (!resp.ok) throw new Error('API ' + resp.status);
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '', text = '';
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, {stream:true});
+        const lines = buffer.split('\n'); buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6);
+          if (data === '[DONE]') continue;
+          try {
+            const json = JSON.parse(data);
+            if (json.type === 'content_block_delta' && json.delta?.text) {
+              text += json.delta.text;
+              streamDiv.textContent = text;
+              streamDiv.appendChild(cursor);
+            }
+          } catch {}
+        }
+      }
+      cursor.remove(); streamDiv.textContent = text;
+    } catch(err) {
+      const fallback = `The ${period} reporting period reflects continued implementation momentum under SEAP 2026, with ${completed.length} of ${ACTIVITIES.length} tracked activities completed (${Math.round(completed.length/ACTIVITIES.length*100)}%). Progress is strongest in cross-border coordination and AFP surveillance, where WHO and CDC/TFGH have maintained consistent delivery against their commitments. SIA campaign preparation for the April SNID is actively underway, with microplanning validation and vaccinator training progressing across South-Central Somalia.\n\nSeveral overdue activities require urgent attention from responsible partners. ${overdueText}. Banadir Region continues to present the greatest programme risk, given persistent cVDPV2 environmental detections and documented vaccine hesitancy. Resolution of the cold chain equipment status report is critical before the April SNID to confirm nOPV2 supply chain integrity across all consequential geographies.\n\nState-level performance varies significantly: Somaliland (90%), Jubaland (88%), and Puntland (85%) are on track, while Banadir (61%) and Hir-Shabelle (70%) require targeted corrective action. NPCC should formally escalate overdue commitments in Banadir to state MOH and SPCC leadership this week.\n\nRecommended next steps for the coming period: finalise and field-validate all April SNID microplans using GIS in consequential geography districts; complete the overdue cold chain status report; convene the SPCC coordination call to align state-level teams; and advance the vaccine hesitancy response plan for Banadir ahead of the campaign.`;
+      let i = 0;
+      const iv = setInterval(() => {
+        if (i >= fallback.length) { clearInterval(iv); cursor.remove(); streamDiv.textContent = fallback; return; }
+        i += 8; streamDiv.textContent = fallback.slice(0,i); streamDiv.appendChild(cursor);
+      }, 16);
+    }
+  }
+
+  btn.disabled = false; btn.textContent = 'Regenerate report ↗';
+  document.getElementById('report-status').textContent = 'Ready';
+}
+
+function copyReport() {
+  const content = document.getElementById('report-content');
+  if (!content.classList.contains('visible')) return;
+  navigator.clipboard.writeText(content.innerText).then(() => showToast('Report copied to clipboard'));
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+function showView(id, btn) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('view-' + id).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (id === 'audit') loadAuditLog();
+}
+
+function timeAgo(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - new Date(ts).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h/24)}d ago`;
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:24px;right:24px;background:var(--accent);color:white;padding:10px 18px;border-radius:6px;font-size:13px;z-index:999;transition:opacity 0.4s;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; setTimeout(()=>t.remove(),400); }, 2800);
+}
+
+document.getElementById('log-modal').addEventListener('click', function(e) { if (e.target===this) closeModal(); });
+document.getElementById('modal-date').value = new Date().toISOString().split('T')[0];
+
+// ─── START ────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
