@@ -289,13 +289,15 @@
           <div class="step-title">Create the activity_logs table</div>
           <div class="step-desc">In your Supabase project, click "SQL Editor" in the left sidebar, paste the SQL below, and click Run.</div>
           <div class="code-block">create table activity_logs (
-  id           uuid default gen_random_uuid() primary key,
-  activity_id  integer not null,
-  org          text not null,
-  status       text not null,
-  notes        text,
-  geography    text,
-  logged_at    timestamptz default now()
+  id             uuid default gen_random_uuid() primary key,
+  activity_id    integer,
+  activity_label text,
+  indicator      text,
+  org            text not null,
+  status         text not null,
+  notes          text,
+  geography      text,
+  logged_at      timestamptz default now()
 );
 
 alter table activity_logs enable row level security;
@@ -434,9 +436,16 @@ create policy "Anyone can insert logs"
       <button class="filter-chip active" onclick="filterActivities('all', this)">All</button>
       <button class="filter-chip" onclick="filterActivities('mine', this)">My org</button>
       <button class="filter-chip" onclick="filterActivities('overdue', this)">Overdue</button>
-      <button class="filter-chip" onclick="filterActivities('sia', this)">SIA campaigns</button>
-      <button class="filter-chip" onclick="filterActivities('surv', this)">Surveillance</button>
-      <button class="filter-chip" onclick="filterActivities('coord', this)">Coordination</button>
+      <button class="filter-chip" onclick="filterActivities('SIA Quality', this)">SIA Quality</button>
+      <button class="filter-chip" onclick="filterActivities('Routine Immunization', this)">Routine Immunization</button>
+      <button class="filter-chip" onclick="filterActivities('High-risk Populations', this)">High-Risk Populations</button>
+      <button class="filter-chip" onclick="filterActivities('Access and Inaccessibility', this)">Access &amp; Inaccessibility</button>
+      <button class="filter-chip" onclick="filterActivities('Workforce and Mitigation', this)">Workforce &amp; Mitigation</button>
+      <button class="filter-chip" onclick="filterActivities('Surveillance', this)">Surveillance</button>
+      <button class="filter-chip" onclick="filterActivities('Cross-border Coordination', this)">Cross-Border Coordination</button>
+      <button class="filter-chip" onclick="filterActivities('Coordination and Accountability', this)">Coordination &amp; Accountability</button>
+      <button class="filter-chip" onclick="filterActivities('Community Engagement', this)">Community Engagement</button>
+      <button class="filter-chip" onclick="filterActivities('Logistics and Vaccine Management', this)">Logistics &amp; Vaccine Management</button>
       <div class="filter-spacer"></div>
       <button class="btn-add" onclick="openLogModal()">+ Log update</button>
     </div>
@@ -517,7 +526,25 @@ create policy "Anyone can insert logs"
   <div class="modal">
     <div class="modal-title">Log activity update</div>
     <div class="modal-sub">This update will be saved to the shared database and visible to all partners immediately.</div>
-    <div class="form-group"><label class="form-label">Activity</label><select class="form-select" id="modal-activity"></select></div>
+    <div class="form-group"><label class="form-label">Strategic area</label>
+      <select class="form-select" id="modal-area" onchange="updateActivitySelect()">
+        <option value="">— select area —</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Activity</label>
+      <select class="form-select" id="modal-activity" onchange="updateSubActivitySelect()">
+        <option value="">— select activity —</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Sub-activity</label>
+      <select class="form-select" id="modal-subactivity" onchange="updateIndicator()">
+        <option value="">— select sub-activity —</option>
+      </select>
+    </div>
+    <div class="form-group" id="indicator-group" style="display:none">
+      <label class="form-label">Indicator</label>
+      <div id="indicator-display" style="padding:8px 11px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg2);font-size:12px;color:var(--text2);min-height:36px;line-height:1.5;"></div>
+    </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Status</label>
         <select class="form-select" id="modal-status">
@@ -528,11 +555,27 @@ create policy "Anyone can insert logs"
       <div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="modal-date"></div>
     </div>
     <div class="form-group"><label class="form-label">Notes / evidence</label><textarea class="form-textarea" id="modal-notes" placeholder="Describe what was done, outcomes, or reason for delay…"></textarea></div>
-    <div class="form-group"><label class="form-label">Geography</label>
-      <select class="form-select" id="modal-geo">
-        <option>National (NPCC)</option><option>Banadir</option><option>South-West State</option>
-        <option>Jubaland</option><option>Galmudug</option><option>Hir-Shabelle</option>
-        <option>Puntland</option><option>Somaliland</option>
+    <div class="form-group"><label class="form-label">Level</label>
+      <select class="form-select" id="modal-level" onchange="updateGeoSelects()">
+        <option value="National">National (NPCC)</option>
+        <option value="State">State</option>
+        <option value="Regional">Regional</option>
+        <option value="District">District</option>
+      </select>
+    </div>
+    <div class="form-group" id="geo-state-group" style="display:none"><label class="form-label">State</label>
+      <select class="form-select" id="modal-state" onchange="updateRegionSelect()">
+        <option value="">— select state —</option>
+      </select>
+    </div>
+    <div class="form-group" id="geo-region-group" style="display:none"><label class="form-label">Region</label>
+      <select class="form-select" id="modal-region" onchange="updateDistrictSelect()">
+        <option value="">— select region —</option>
+      </select>
+    </div>
+    <div class="form-group" id="geo-district-group" style="display:none"><label class="form-label">District <span id="dist-code-badge" style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-left:4px;"></span></label>
+      <select class="form-select" id="modal-district" onchange="updateDistrictCode()">
+        <option value="">— select district —</option>
       </select>
     </div>
     <div class="modal-actions">
@@ -547,40 +590,55 @@ create policy "Anyone can insert logs"
 // TO HARDCODE CREDENTIALS (recommended before publishing to GitHub Pages):
 // Replace the empty strings below with your actual values.
 // This means users won't need to enter them on first visit.
-const HARDCODED_URL = 'https://dgzlgarclbyqkddbpmjb.supabase.co'; 
-const HARDCODED_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnemxnYXJjbGJ5cWtkZGJwbWpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5NTIzNTUsImV4cCI6MjA4OTUyODM1NX0.c0IikVVRSd_MLgDb0huwmBaWSbGt5RsATgEdef94Apk'; 
+const HARDCODED_URL = 'https://dgzlgarclbyqkddbpmjb.supabase.co';  // e.g. 'https://abcdefghij.supabase.co'
+const HARDCODED_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnemxnYXJjbGJ5cWtkZGJwbWpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5NTIzNTUsImV4cCI6MjA4OTUyODM1NX0.c0IikVVRSd_MLgDb0huwmBaWSbGt5RsATgEdef94Apk';  // e.g. 'eyJhbGciOiJ...'
+
+// ─── GEOGRAPHY DATA ───────────────────────────────────────────────────────────
+const GEO_DATA = {"BANAADIR MUNICIPALITY":{"BANADIR":{"code":"BAN","districts":[{"name":"ABDUL AZIZ","code":"ADA"},{"name":"BONDERE","code":"BDB"},{"name":"DHARKENLY","code":"DRK"},{"name":"DANYILE","code":"DYN"},{"name":"HODAN","code":"HDN"},{"name":"HAMAR JABJAB","code":"HJB"},{"name":"HELIWA","code":"HLW"},{"name":"HAMAR WEYN","code":"HMW"},{"name":"HAWAL WADAG","code":"HWL"},{"name":"KAHDA","code":"KDA"},{"name":"KARAN","code":"KRN"},{"name":"MADINA","code":"MDN"},{"name":"SHIBIS","code":"SBS"},{"name":"SHANGANI","code":"SHN"},{"name":"WABERI","code":"WBR"},{"name":"WARDEGLY","code":"WDA"},{"name":"YAQSHID","code":"YQA"}]}},"GALMUDUG STATE":{"GALGADUD":{"code":"GDD","districts":[{"name":"ABUDWAQ","code":"ABD"},{"name":"ADADO","code":"ADD"},{"name":"BALANBALE","code":"BLB"},{"name":"DUSAMREB","code":"DSB"},{"name":"EL BUR","code":"ELB"},{"name":"EL DHERE","code":"ELD"},{"name":"ELGARAS","code":"ELG"},{"name":"GALHAREERI","code":"GHR"},{"name":"GALAD","code":"GLD"},{"name":"GALINSOOR","code":"GLS"},{"name":"GURIEL","code":"GUR"}]},"SOUTH MUDUG":{"code":"MUD","districts":[{"name":"HOBYO","code":"HOB"},{"name":"HARADHERE","code":"HRD"},{"name":"GALKAYU SOUTH","code":"SGA"}]}},"HIRSHABELLE STATE":{"HIRAN":{"code":"HRN","districts":[{"name":"BULO BURTI","code":"BBT"},{"name":"BELET WEYNE","code":"BLT"},{"name":"JALALAQSI","code":"JLX"},{"name":"MAHAS","code":"MAH"},{"name":"MATABAN","code":"MTB"}]},"MIDDLE SHABELLE":{"code":"MSH","districts":[{"name":"ADALE","code":"ADL"},{"name":"ADEN YABAL","code":"ADY"},{"name":"BALAD","code":"BLD"},{"name":"JOWHAR","code":"JOW"},{"name":"MAHADAY","code":"MDY"},{"name":"RAGA ELLE","code":"RGE"},{"name":"RUNINGOD","code":"RNG"},{"name":"WARSHEIKH","code":"WRS"}]}},"JUBBALAND STATE":{"GEDO":{"code":"GDO","districts":[{"name":"BURDUBO","code":"BDB"},{"name":"BELET HAWA","code":"BLH"},{"name":"BARDERA","code":"BRD"},{"name":"DOLO","code":"DLO"},{"name":"EL WAK","code":"ELW"},{"name":"GARBAHAREY","code":"GBH"},{"name":"GEDWEIN","code":"GDW"},{"name":"LUUQ","code":"LUQ"}]},"LOWER JUBBA":{"code":"LJB","districts":[{"name":"AFMADOW","code":"AFM"},{"name":"BADHADHE","code":"BDD"},{"name":"HAGAR","code":"HGR"},{"name":"JILIB WEST","code":"JBE"},{"name":"JAMAAME EAST","code":"JME"},{"name":"JAMAAME WEST","code":"JMW"},{"name":"KISMAYO","code":"KIS"}]},"MIDDLE JUBBA":{"code":"MJB","districts":[{"name":"BUAALE","code":"BUA"},{"name":"JILIB EAST","code":"JBE"},{"name":"SAKOW","code":"SKO"},{"name":"SALAGLE","code":"SLG"}]}},"PUNTLAND STATE":{"BARI":{"code":"BRI","districts":[{"name":"ALULA","code":"ALU"},{"name":"BARGAL","code":"BAR"},{"name":"BENDER BAYLA","code":"BBL"},{"name":"BOSSASO","code":"BOS"},{"name":"GARDO","code":"GAR"},{"name":"HAFUN","code":"HFN"},{"name":"ISKUSHUBAN","code":"ISH"},{"name":"QANDALA","code":"QAN"},{"name":"RAKO","code":"RKO"},{"name":"UFEYN","code":"UFN"},{"name":"WACIYA","code":"WAY"}]},"MUDUG":{"code":"MUD","districts":[{"name":"GALKAYU NORTH","code":"GAL"},{"name":"GOLDOGOB","code":"GDB"},{"name":"JARIBAN","code":"JIR"}]},"NUGAL":{"code":"NUG","districts":[{"name":"BURTINLE","code":"BRT"},{"name":"DANGOROYO","code":"DNG"},{"name":"EYL","code":"EIL"},{"name":"GAROWE","code":"GRW"}]}},"SOMALILAND STATE":{"AWDAL":{"code":"AWL","districts":[{"name":"BAKI","code":"BKI"},{"name":"BORAMA","code":"BOR"},{"name":"LUGHAYA","code":"LUH"},{"name":"ZEILA","code":"SAY"}]},"GALBEED":{"code":"WGB","districts":[{"name":"BALIGUBADLE","code":"BGB"},{"name":"GABILEY","code":"GBL"},{"name":"HARGEISA","code":"HAR"}]},"SAHIL":{"code":"SAH","districts":[{"name":"BERBERA","code":"BER"},{"name":"SHEIKH","code":"SKH"}]},"SANAG":{"code":"SNG","districts":[{"name":"BADHAN","code":"BDN"},{"name":"EL AFWEYN","code":"ELF"},{"name":"ERIGAVO","code":"ERI"}]},"SOOL":{"code":"SOL","districts":[{"name":"XUDUN","code":"HDN"},{"name":"LAS ANOD","code":"LND"},{"name":"TALEH","code":"TEL"}]},"TOGDHER":{"code":"TOG","districts":[{"name":"AINABO","code":"ANB"},{"name":"BUHODLE","code":"BUH"},{"name":"BURAO","code":"BUR"},{"name":"OODWEYNE","code":"OWD"}]}},"SOUTHWEST STATE":{"BAKOL":{"code":"BKL","districts":[{"name":"EL BARDE","code":"ELB"},{"name":"HUDUR","code":"HUD"},{"name":"RABDURE","code":"RBD"},{"name":"TIYEGLO","code":"TGL"},{"name":"WAJID","code":"WJD"}]},"BAY":{"code":"BAY","districts":[{"name":"BAIDOA","code":"BDB"},{"name":"BERDALE","code":"BDL"},{"name":"BURHAKABA","code":"BHB"},{"name":"DINSOOR","code":"DNS"},{"name":"QANAAH DERE","code":"QSD"}]},"LOWER SHABELLE":{"code":"LSH","districts":[{"name":"AFGOI","code":"AFG"},{"name":"AWDHEEGLE","code":"AWD"},{"name":"BRAVA","code":"BRV"},{"name":"KURTUNWAAREY","code":"KRT"},{"name":"MARKA","code":"MAR"},{"name":"QORYOLEY","code":"QRO"},{"name":"SABLALE","code":"SBL"},{"name":"WANLEWEYNE","code":"WLW"}]}}};
+
+// ─── ACTIVITIES DATA ──────────────────────────────────────────────────────────
+const ACTIVITIES_DATA = {"SIA Quality":{"Microplanning":[{"sub":"Reform and simplify microplanning tools","indicator":"% microplanning tools revised","org":"FMOH/WHO/UNICEF","level":"National","cadence":"Yes"},{"sub":"Conduct joint field validation with GIS","indicator":"% microplans field-validated","org":"WHO/UNICEF","level":"State","cadence":"Yes"},{"sub":"Capture all settlements, IDP sites and nomadic routes","indicator":"% settlements captured in validated microplans","org":"MOH/WHO","level":"District","cadence":"Yes"},{"sub":"Rationalize team workloads and supervisory ratios","indicator":"% teams meeting workload standard","org":"WHO","level":"District","cadence":"Yes"}],"Readiness":[{"sub":"Introduce campaign readiness verification checklist","indicator":"Checklist approved and shared","org":"FMOH/WHO","level":"National","cadence":"Yes"},{"sub":"Apply No Readiness \u2192 No Campaign decision rule","indicator":"% districts cleared before campaign","org":"State MOH/WHO/UNICEF","level":"State","cadence":"Yes"}],"Team performance":[{"sub":"Pilot performance-based team deployment models","indicator":"# states piloting deployment model","org":"WHO/UNICEF","level":"State","cadence":"Yes"}],"Training":[{"sub":"Standardize vaccinator and supervisor training materials in Somali","indicator":"Training package finalized","org":"WHO/UNICEF","level":"National","cadence":"Yes"},{"sub":"Conduct cascaded quality-improvement workshops","indicator":"# workshops completed","org":"FMOH/WHO/UNICEF","level":"National","cadence":"Yes"},{"sub":"Strengthen oversight of vaccinator training in poor-performing districts","indicator":"% trainings supervised by higher level staff","org":"WHO/UNICEF","level":"State","cadence":"Yes"}],"Implementation":[{"sub":"Conduct SNID round 1 in consequential geographies","indicator":"SNID round 1 completed","org":"FMOH/WHO/UNICEF","level":"National","cadence":"Yes"},{"sub":"Conduct SNID round 2 in consequential geographies","indicator":"SNID round 2 completed","org":"FMOH/WHO/UNICEF","level":"National","cadence":"Yes"},{"sub":"Conduct SNID round 3 in consequential geographies","indicator":"SNID round 3 completed","org":"FMOH/WHO/UNICEF","level":"National","cadence":"Yes"},{"sub":"Conduct SNID round 4 in consequential geographies","indicator":"SNID round 4 completed","org":"FMOH/WHO/UNICEF","level":"National","cadence":"Yes"},{"sub":"Implement SIAD rounds when access is granted in security-compromised areas","indicator":"# SIAD rounds conducted","org":"WHO/MOH","level":"District","cadence":"Yes"}],"Monitoring":[{"sub":"Conduct intra-campaign monitoring for real-time corrective action","indicator":"% areas monitored intra-campaign","org":"WHO/Partners","level":"District","cadence":"Yes"},{"sub":"Expand independent post-campaign monitoring including third-party LQAS","indicator":"% districts passing LQAS","org":"WHO/Partners","level":"State","cadence":"Yes"},{"sub":"Pilot remote monitoring in security-compromised areas using mobile feedback","indicator":"# areas using remote monitoring","org":"WHO/UNICEF","level":"State","cadence":"Yes"},{"sub":"LQAS conducted after each SIA","indicator":"% districts passing LQAS","org":"WHO","level":"State","cadence":"Yes"}],"Review":[{"sub":"Hold daily evening review meetings during campaigns","indicator":"# daily review meetings held","org":"All partners","level":"National","cadence":"Yes"},{"sub":"Conduct post-campaign review meetings and track actions","indicator":"% post-campaign actions closed before next round","org":"All partners","level":"National","cadence":"Yes"}],"Data management":[{"sub":"Develop integrated SIA dashboard linked to DHIS2","indicator":"Dashboard functional by end of Q2","org":"WHO/MOH","level":"National","cadence":"Yes"},{"sub":"Deploy and train dedicated state-level data managers","indicator":"# states with trained data managers","org":"WHO","level":"State","cadence":"Yes"},{"sub":"Strengthen vaccination and monitor tracking systems","indicator":"% campaigns with complete tracking datasets","org":"WHO","level":"State","cadence":"Yes"}],"Vaccination rounds":[{"sub":"SNID round 1 implementation","indicator":"# SNID rounds completed","org":"FMOH","level":"National","cadence":"Yes"},{"sub":"SNID round 2 implementation","indicator":"# SNID rounds completed","org":"FMOH","level":"National","cadence":"Yes"},{"sub":"SNID round 3 implementation","indicator":"# SNID rounds completed","org":"FMOH","level":"National","cadence":"Yes"},{"sub":"SNID round 4 implementation","indicator":"# SNID rounds completed","org":"FMOH","level":"National","cadence":"Yes"}]},"Routine Immunization":{"Integration":[{"sub":"Use polio campaign data to identify missed children for RI/BCU referral","indicator":"# missed children referred to RI/BCU","org":"MOH/UNICEF","level":"District","cadence":"Yes"}],"Microplanning support":[{"sub":"Apply polio microplanning expertise to BCU planning","indicator":"# BCU microplans supported by polio teams","org":"MOH/WHO/UNICEF","level":"National","cadence":"Yes"}],"Service coordination":[{"sub":"Strengthen mechanisms to refer children from campaigns and surveillance to routine services","indicator":"% states with referral mechanism in use","org":"MOH/UNICEF","level":"State","cadence":"Yes"}],"Vaccine integration":[{"sub":"Include bOPV in BCU multi-antigen activities where planned","indicator":"# integrated BCU sessions including bOPV","org":"MOH/UNICEF","level":"National","cadence":"Yes"}],"Demand generation":[{"sub":"Use polio social mobilizers to promote BCU uptake among older children","indicator":"# mobilizer sessions supporting BCU","org":"UNICEF","level":"District","cadence":"Yes"}],"Monitoring":[{"sub":"Leverage LQAS/independent monitoring approaches to assess BCU performance","indicator":"# BCU reviews using LQAS/IM methods","org":"WHO/UNICEF","level":"State","cadence":"Yes"}],"Supportive supervision":[{"sub":"Implement integrated supportive supervision and joint advocacy on immunization","indicator":"# integrated supervision visits conducted","org":"MOH/WHO/UNICEF","level":"National","cadence":"Yes"}]},"High-risk Populations":{"IDP mapping":[{"sub":"Complete mapping of all IDP camps and include them in microplans","indicator":"% IDP camps mapped and included","org":"UNICEF/IOM/MOH","level":"State","cadence":"Yes"}],"Surveillance":[{"sub":"Map health facilities serving IDP populations and strengthen reporting network","indicator":"% IDP-serving facilities in reporting network","org":"WHO/MOH","level":"State","cadence":"Yes"}],"Population movement":[{"sub":"Regularly track movement of pastoralist and nomadic communities","indicator":"# movement updates shared","org":"IOM/FAO/UNHCR","level":"National","cadence":"Yes"}],"Transit vaccination":[{"sub":"Position TPV sites at selected large IDP camps and transit points","indicator":"# TPV sites established","org":"WHO/IOM/MOH","level":"State","cadence":"Yes"}],"Oversight":[{"sub":"Ensure close oversight of vaccination team coverage in IDP camps","indicator":"% IDP teams supervised during campaigns","org":"WHO/MOH","level":"District","cadence":"Yes"}],"Partnerships":[{"sub":"Coordinate with agencies supporting IDP camps to integrate vaccination and surveillance","indicator":"# joint partner actions in IDP sites","org":"UNHCR/IOM/WFP/NGOs","level":"National","cadence":"Yes"}]},"Access and Inaccessibility":{"Negotiation":[{"sub":"Engage community/clan/religious elders for access negotiations","indicator":"# access negotiation meetings held","org":"UNICEF/WHO/MOH","level":"State","cadence":"Yes"}],"Integrated delivery":[{"sub":"Package polio vaccination with other health/humanitarian services during negotiations","indicator":"# integrated service packages used for access","org":"MOH/UNICEF/WHO/NGOs","level":"National","cadence":"Yes"}],"Readiness":[{"sub":"Pre-position training and microplanning for rapid SIAD response in newly accessible areas","indicator":"% newly accessible areas with ready-to-deploy plans","org":"WHO/MOH","level":"State","cadence":"Yes"}],"Mapping":[{"sub":"Map areas not accessible for supervision and monitoring","indicator":"# inaccessible areas mapped and updated","org":"WHO","level":"National","cadence":"Yes"}],"Independent feedback":[{"sub":"Identify and train local independent supervisors in security-compromised areas","indicator":"# local supervisors trained","org":"WHO/UNICEF","level":"State","cadence":"Yes"}],"Non-traditional approaches":[{"sub":"Explore local/non-traditional approaches to reach populations on the move","indicator":"# alternative delivery approaches tested","org":"MOH/NGOs","level":"District","cadence":"Yes"}]},"Surveillance":{"Planning":[{"sub":"Revise and update district-specific surveillance plans for low-performing districts","indicator":"# low-performing districts with updated plans","org":"WHO/MOH","level":"State","cadence":"Yes"}],"Analysis":[{"sub":"Conduct focused monthly analysis of surveillance data in high-risk groups and geographies","indicator":"# monthly surveillance analyses completed","org":"WHO/MOH","level":"National","cadence":"Yes"}],"Timeliness":[{"sub":"Review GPS-enabled specimen transport process and address state-specific gaps","indicator":"% specimens transported on time","org":"WHO","level":"State","cadence":"Yes"}],"Lab coordination":[{"sub":"Strengthen coordination with KEMRI lab and regional office through timely data sharing","indicator":"# timely lab coordination updates shared","org":"WHO/KEMRI","level":"National","cadence":"Yes"}],"Case validation":[{"sub":"Validate at least 50% of AFP cases every month","indicator":"% AFP cases validated monthly","org":"WHO/MOH","level":"National","cadence":"Yes"}],"Supportive supervision":[{"sub":"Strengthen national tracking of AFP and ES supervision","indicator":"% planned supervision visits completed","org":"WHO","level":"National","cadence":"Yes"}],"Training":[{"sub":"Train environmental surveillance collectors and supervisors","indicator":"# ES staff trained","org":"WHO","level":"National","cadence":"Yes"}],"Review":[{"sub":"Conduct external in-depth desk and field surveillance review in Q2","indicator":"External review completed by Q2","org":"WHO/MOH","level":"National","cadence":"Yes"}],"ES optimization":[{"sub":"Review performance of each ES site and add/replace sites as needed","indicator":"# ES site reviews completed","org":"WHO","level":"National","cadence":"Yes"}],"Active site rationalization":[{"sub":"Rationalize active surveillance sites twice a year","indicator":"# active site rationalization exercises completed","org":"WHO/MOH","level":"National","cadence":"Yes"}],"Investigations":[{"sub":"Conduct detailed investigations and 30-household surveys for all positive PV2 AFP/ES detections","indicator":"% positive PV2 detections with investigation and 30 HH survey","org":"WHO/MOH","level":"State","cadence":"Yes"}],"Follow-up":[{"sub":"Complete timely 60-day follow-up for inadequate, hot, and inaccessible-area AFP cases","indicator":"% eligible AFP cases with timely 60-day follow-up","org":"WHO/MOH","level":"State","cadence":"Yes"}],"Desk reviews":[{"sub":"Conduct quarterly surveillance desk reviews and field validations at state level","indicator":"# quarterly desk reviews completed","org":"WHO/MOH","level":"State","cadence":"Yes"}],"Guidelines":[{"sub":"Review and update Somalia surveillance guidelines","indicator":"Updated surveillance guidelines approved","org":"WHO/MOH","level":"National","cadence":"Yes"}],"Committees":[{"sub":"Hold biannual NCC and ERG meetings to classify pending cases","indicator":"# NCC/ERG meetings held","org":"WHO/MOH","level":"National","cadence":"Yes"}],"Inaccessible areas":[{"sub":"Map formal and informal surveillance networks in inaccessible areas","indicator":"% inaccessible areas with mapped surveillance networks","org":"WHO/MOH","level":"State","cadence":"Yes"},{"sub":"Review and strengthen CHW network and workload in inaccessible areas","indicator":"% CHW network reviewed in inaccessible areas","org":"WHO/MOH","level":"State","cadence":"Yes"},{"sub":"Sensitize clan elders and community influencers on AFP reporting","indicator":"# sensitization sessions on AFP reporting","org":"MOH/WHO","level":"District","cadence":"Yes"},{"sub":"Strengthen reverse cold chain for samples from inaccessible areas","indicator":"% inaccessible-area samples with functional reverse cold chain","org":"WHO","level":"State","cadence":"Yes"}],"Internal review":[{"sub":"Conduct internal surveillance review at end Q2/early Q3","indicator":"Internal surveillance review completed","org":"WHO/MOH","level":"National","cadence":"Yes"}],"AFP quality":[{"sub":"Validate at least 50% of AFP cases","indicator":"% AFP cases validated","org":"WHO","level":"National","cadence":"Yes"}],"ES system":[{"sub":"Maintain 20 active environmental surveillance sites","indicator":"# active ES sites","org":"WHO","level":"National","cadence":"Yes"}],"Case transport":[{"sub":"Timely specimen transport to lab","indicator":"% specimens transported on time","org":"WHO","level":"State","cadence":"Yes"}]},"Workforce and Mitigation":{"Central support":[{"sub":"Support national surveillance coordinator with 2 EPI officers and 2 data managers","indicator":"# support staff assigned at central level","org":"WHO","level":"National","cadence":"Yes"}],"State support":[{"sub":"Support SSOs with state EPI officers, emergency officers and data managers","indicator":"% states with mitigation support package in place","org":"WHO","level":"State","cadence":"Yes"}]},"Cross-border Coordination":{"Meetings":[{"sub":"Hold fortnightly virtual cross-border coordination meetings","indicator":"# cross-border meetings held","org":"WHO/MOH","level":"National","cadence":"Yes"}],"Face-to-face meetings":[{"sub":"Conduct face-to-face cross-border meetings with Kenya, Ethiopia and Djibouti","indicator":"# face-to-face cross-border meetings held","org":"WHO/MOH","level":"National","cadence":"Yes"}],"Campaigns":[{"sub":"Synchronize campaigns with neighboring countries where feasible","indicator":"# synchronized campaign opportunities implemented","org":"FMOH/WHO/UNICEF","level":"National","cadence":"Yes"}],"Surveillance":[{"sub":"Update and sensitize border health facilities each quarter","indicator":"% border facilities updated/sensitized quarterly","org":"WHO/MOH","level":"State","cadence":"Yes"}],"Supplies":[{"sub":"Ensure border facilities have stool kits and reverse cold chain materials","indicator":"% priority border sites stocked with kits/RCC","org":"WHO","level":"State","cadence":"Yes"}],"Training":[{"sub":"Conduct refresher training for district/state surveillance officers on cross-border AFP work","indicator":"# officers trained on cross-border AFP work","org":"WHO/MOH","level":"State","cadence":"Yes"}],"Data sharing":[{"sub":"Ensure timely cross-notification and surveillance data sharing","indicator":"% cross-border notifications shared on time","org":"WHO/MOH","level":"National","cadence":"Yes"}],"Partnerships":[{"sub":"Coordinate with IOM/FAO to map formal and informal crossing points","indicator":"# crossing points mapped/updated","org":"IOM/FAO/WHO","level":"National","cadence":"Yes"}],"Transit vaccination":[{"sub":"Establish robust supervision and monitoring for border TPV sites","indicator":"% TPV sites supervised each month","org":"WHO/MOH","level":"State","cadence":"Yes"}],"IHR advocacy":[{"sub":"Advocate for implementation of IHR 2005 polio recommendations","indicator":"# advocacy actions on IHR recommendations","org":"FMOH/WHO","level":"National","cadence":"Yes"}]},"Coordination and Accountability":{"NPCC":[{"sub":"Hold weekly strategic NPCC meetings","indicator":"# NPCC meetings held vs planned","org":"FMOH/WHO/UNICEF/Partners","level":"National","cadence":"Yes"},{"sub":"Establish national immunization and polio eradication technical working group","indicator":"TWG established and meeting regularly","org":"FMOH/Partners","level":"National","cadence":"Yes"},{"sub":"Revise and update NPCC nomination documents","indicator":"Updated nomination documents approved","org":"FMOH","level":"National","cadence":"Yes"},{"sub":"Make NPCC working groups fully functional","indicator":"% NPCC working groups meeting regularly","org":"FMOH/Partners","level":"National","cadence":"Yes"}],"SPCC":[{"sub":"Strengthen/formalize SPCCs based on NPCC model","indicator":"# SPCCs established/functional","org":"State MOH/Partners","level":"State","cadence":"Yes"}],"State meetings":[{"sub":"Hold weekly SPCC meetings and monthly stakeholder coordination meetings","indicator":"% state meetings conducted as planned","org":"State MOH/Partners","level":"State","cadence":"Yes"}],"NPCC-SPCC linkage":[{"sub":"Conduct monthly NPCC calls with SPCCs and monthly support visits","indicator":"% monthly calls/visits completed","org":"FMOH/Partners","level":"National","cadence":"Yes"}],"Programme review":[{"sub":"Hold monthly virtual programme review meetings with subnational teams","indicator":"# monthly programme reviews held","org":"All partners","level":"National","cadence":"Yes"}],"Clusters":[{"sub":"Meet health and nutrition clusters at least monthly with clear outcomes","indicator":"# monthly health/nutrition cluster engagements","org":"FMOH/WHO/UNICEF","level":"National","cadence":"Yes"}],"Partnership mapping":[{"sub":"Map stakeholders and service integration opportunities in IDP camps and insecure areas","indicator":"Stakeholder/service map completed","org":"FMOH/Partners","level":"National","cadence":"Yes"}],"Accountability framework":[{"sub":"Revise and implement accountability framework for all stakeholders and working groups","indicator":"Accountability framework approved and in use","org":"FMOH/Partners","level":"National","cadence":"Yes"}]},"Community Engagement":{"Demand generation":[{"sub":"Engage community leaders and influencers for grassroots accountability","indicator":"# influencer/community sessions held","org":"UNICEF/MOH","level":"District","cadence":"Yes"}],"Communication":[{"sub":"Develop tailored communication for high-risk groups and hesitant communities","indicator":"% priority areas with tailored messages","org":"UNICEF","level":"State","cadence":"Yes"}],"Social data":[{"sub":"Close social data gaps to inform mitigation plans for missed children","indicator":"# districts with usable social data profiles","org":"UNICEF/Partners","level":"National","cadence":"Yes"}]},"Logistics and Vaccine Management":{"Cold chain":[{"sub":"Install solar-powered cold chain equipment in facilities and stores","indicator":"# solar cold chain units installed","org":"UNICEF/MOH","level":"State","cadence":"Yes"}],"Vaccine management":[{"sub":"Monitor vaccine utilization, vial destruction, and accountability","indicator":"% campaigns with complete vaccine accountability reports","org":"WHO/UNICEF","level":"National","cadence":"Yes"}]}};
 
 // ─── STATIC DATA ──────────────────────────────────────────────────────────────
 const PILLARS = [
-  { id:'sia',   name:'SIA campaigns',         color:'#2E6B3E' },
-  { id:'surv',  name:'AFP / ES surveillance',  color:'#1A3A6B' },
-  { id:'comm',  name:'Community engagement',   color:'#8B3A1A' },
-  { id:'cold',  name:'Cold chain & vaccines',  color:'#4A1A6B' },
-  { id:'cross', name:'Cross-border coord.',    color:'#1A5F5A' },
-  { id:'ri',    name:'Routine immunization',   color:'#5A5A1A' },
+  { id:'SIA Quality',                    name:'SIA Quality',                    color:'#2E6B3E' },
+  { id:'Routine Immunization',           name:'Routine Immunization',           color:'#1A5F5A' },
+  { id:'High-risk Populations',          name:'High-Risk Populations',          color:'#8B3A1A' },
+  { id:'Access and Inaccessibility',     name:'Access & Inaccessibility',       color:'#7A5000' },
+  { id:'Surveillance',                   name:'Surveillance',                   color:'#1A3A6B' },
+  { id:'Workforce and Mitigation',       name:'Workforce & Mitigation',         color:'#5A5A1A' },
+  { id:'Cross-border Coordination',      name:'Cross-Border Coordination',      color:'#1A5FA8' },
+  { id:'Coordination and Accountability',name:'Coordination & Accountability',  color:'#4A1A6B' },
+  { id:'Community Engagement',           name:'Community Engagement',           color:'#6B2D1A' },
+  { id:'Logistics and Vaccine Management',name:'Logistics & Vaccine Management',color:'#2E4A6B' },
 ];
-const ACTIVITIES = [
-  {id:1,  name:'NPCC weekly coordination meeting',              pillar:'sia',  owner:'WHO',       cadence:'Weekly',       due:'Every Mon', defaultStatus:'completed', state:'National'},
-  {id:2,  name:'SNID April microplanning validation',            pillar:'sia',  owner:'WHO/UNICEF', cadence:'Pre-campaign', due:'28 Mar',    defaultStatus:'in-progress', state:'National'},
-  {id:3,  name:'Campaign readiness checklist — Banadir',         pillar:'sia',  owner:'WHO',       cadence:'Pre-campaign', due:'15 Mar',    defaultStatus:'overdue',     state:'Banadir'},
-  {id:4,  name:'Vaccinator training (South-West State)',         pillar:'sia',  owner:'UNICEF',    cadence:'Pre-campaign', due:'25 Mar',    defaultStatus:'in-progress', state:'South-West'},
-  {id:5,  name:'GIS microplan upload to DHIS2',                  pillar:'sia',  owner:'WHO',       cadence:'Pre-campaign', due:'20 Mar',    defaultStatus:'in-progress', state:'National'},
-  {id:6,  name:'AFP case validation (Banadir)',                  pillar:'surv', owner:'WHO',       cadence:'Monthly',      due:'15 Mar',    defaultStatus:'in-progress', state:'Banadir'},
-  {id:7,  name:'Environmental surveillance sample collection',   pillar:'surv', owner:'WHO/MOH',   cadence:'Fortnightly',  due:'22 Mar',    defaultStatus:'not-started', state:'National'},
-  {id:8,  name:'Surveillance network refresher training',        pillar:'surv', owner:'WHO',       cadence:'Quarterly',    due:'31 Mar',    defaultStatus:'not-started', state:'National'},
-  {id:9,  name:'NCC meeting (national certification)',           pillar:'surv', owner:'MOH',       cadence:'Bi-annual',    due:'Jun 2026',  defaultStatus:'completed',   state:'National'},
-  {id:10, name:'Vaccine hesitancy response — Banadir',           pillar:'comm', owner:'UNICEF',    cadence:'Monthly',      due:'10 Mar',    defaultStatus:'overdue',     state:'Banadir'},
-  {id:11, name:'Social mobilizer deployment & briefing',         pillar:'comm', owner:'UNICEF',    cadence:'Pre-campaign', due:'25 Mar',    defaultStatus:'not-started', state:'National'},
-  {id:12, name:'Community leader engagement (inaccessible areas)',pillar:'comm',owner:'WHO/MOH',   cadence:'Monthly',      due:'28 Mar',    defaultStatus:'in-progress', state:'South-West'},
-  {id:13, name:'Cold chain equipment status report',             pillar:'cold', owner:'UNICEF',    cadence:'Monthly',      due:'10 Mar',    defaultStatus:'overdue',     state:'National'},
-  {id:14, name:'Solar SDD maintenance check — Jubaland',         pillar:'cold', owner:'UNICEF',    cadence:'Quarterly',    due:'31 Mar',    defaultStatus:'not-started', state:'Jubaland'},
-  {id:15, name:'nOPV2 stock reconciliation',                     pillar:'cold', owner:'UNICEF/WHO',cadence:'Monthly',      due:'20 Mar',    defaultStatus:'in-progress', state:'National'},
-  {id:16, name:'Cross-border call (Kenya / Ethiopia / Djibouti)',pillar:'cross',owner:'WHO/CDC',   cadence:'Fortnightly',  due:'20 Mar',    defaultStatus:'completed',   state:'National'},
-  {id:17, name:'Transit point vaccinator update — Mandera',      pillar:'cross',owner:'WHO',       cadence:'Monthly',      due:'28 Mar',    defaultStatus:'in-progress', state:'National'},
-  {id:18, name:'SPCC state coordination call',                   pillar:'ri',   owner:'UNICEF',    cadence:'Monthly',      due:'10 Mar',    defaultStatus:'overdue',     state:'National'},
-  {id:19, name:'Big Catch-Up round 5 preparation',               pillar:'ri',   owner:'UNICEF/MOH',cadence:'Pre-round',    due:'Apr 2026',  defaultStatus:'not-started', state:'National'},
-  {id:20, name:'DHIS2 RI data validation',                       pillar:'ri',   owner:'MOH',       cadence:'Monthly',      due:'28 Mar',    defaultStatus:'in-progress', state:'National'},
-];
+const ACTIVITIES = (function() {
+  const rows = [];
+  let id = 1;
+  const OWNER_DEFAULT = {'SIA Quality':'WHO/UNICEF','Routine Immunization':'MOH/UNICEF',
+    'High-risk Populations':'UNICEF/IOM/MOH','Access and Inaccessibility':'WHO/MOH',
+    'Surveillance':'WHO','Workforce and Mitigation':'WHO',
+    'Cross-border Coordination':'WHO/MOH','Coordination and Accountability':'FMOH/Partners',
+    'Community Engagement':'UNICEF','Logistics and Vaccine Management':'UNICEF/WHO'};
+  for (const [area, activities] of Object.entries(ACTIVITIES_DATA)) {
+    for (const [actName, subs] of Object.entries(activities)) {
+      const org = subs[0]?.org || OWNER_DEFAULT[area] || 'WHO';
+      const cadence = subs[0]?.cadence || 'Monthly';
+      const level = subs[0]?.level || 'National';
+      rows.push({
+        id: id++,
+        name: actName,
+        pillar: area,
+        owner: org,
+        cadence: cadence,
+        due: '31 Mar',
+        defaultStatus: 'not-started',
+        state: level === 'National' ? 'National' : level
+      });
+    }
+  }
+  return rows;
+})()
 const STATES = [
   {name:'Banadir',     pct:61, color:'#8B2020'},
   {name:'South-West',  pct:74, color:'#7A5000'},
@@ -804,10 +862,8 @@ function renderActivities() {
     filtered = filtered.filter(a => myOwners.some(o => a.owner.includes(o)));
   } else if (currentFilter === 'overdue') {
     filtered = filtered.filter(a => getStatus(a.id) === 'overdue');
-  } else if (['sia','surv','comm','cold','cross','ri'].includes(currentFilter)) {
+  } else if (currentFilter !== 'all') {
     filtered = filtered.filter(a => a.pillar === currentFilter);
-  } else if (currentFilter === 'coord') {
-    filtered = filtered.filter(a => ['cross','ri'].includes(a.pillar));
   }
 
   filtered.forEach(act => {
@@ -876,7 +932,7 @@ function renderAuditLog() {
     div.innerHTML = `
       <span class="audit-org owner-tag ${orgClass}">${row.org}</span>
       <div class="audit-body">
-        <div class="a-act">${act ? act.name : 'Activity #' + row.activity_id}</div>
+        <div class="a-act">${row.activity_label || (act ? act.name : 'Activity #' + row.activity_id)}</div>
         <div class="a-detail">Status: ${row.status}${row.geography ? ' · ' + row.geography : ''}${row.notes ? ' · ' + row.notes.slice(0,80) + (row.notes.length>80?'…':'') : ''}</div>
       </div>
       <div class="audit-time">${timeAgo(row.logged_at)}</div>`;
@@ -885,40 +941,40 @@ function renderAuditLog() {
 }
 
 // ─── LOG MODAL ────────────────────────────────────────────────────────────────
-function populateModalSelect(selectedId = null) {
-  const select = document.getElementById('modal-activity');
-  select.innerHTML = '';
-  const myOwners = PARTNER_OWNERS[currentOrg] || [];
-  ACTIVITIES.forEach(a => {
-    const opt = document.createElement('option');
-    opt.value = a.id;
-    const isMine = myOwners.some(o => a.owner.includes(o));
-    opt.textContent = (isMine ? '★ ' : '') + a.name;
-    if (a.id === selectedId) opt.selected = true;
-    select.appendChild(opt);
-  });
-}
+// populateModalSelect replaced by initAreaSelect()
 
-function openLogModal() {
-  populateModalSelect();
+function openLogModal(areaHint, actHint) {
+  initAreaSelect();
+  updateGeoSelects();
   document.getElementById('modal-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('modal-notes').value = '';
   document.getElementById('modal-submit').disabled = false;
+  // Pre-select area/activity if hints provided
+  if (areaHint) {
+    document.getElementById('modal-area').value = areaHint;
+    updateActivitySelect();
+    if (actHint) {
+      document.getElementById('modal-activity').value = actHint;
+      updateSubActivitySelect();
+    }
+  }
   document.getElementById('log-modal').classList.add('open');
 }
 
 function openLogModalFor(id) {
-  populateModalSelect(id);
-  document.getElementById('modal-date').value = new Date().toISOString().split('T')[0];
-  document.getElementById('modal-notes').value = '';
-  document.getElementById('modal-submit').disabled = false;
-  document.getElementById('log-modal').classList.add('open');
+  // Find activity from ACTIVITIES array
+  const act = ACTIVITIES.find(a => a.id === id);
+  openLogModal(act?.pillar, act?.name);
 }
 
 function closeModal() { document.getElementById('log-modal').classList.remove('open'); }
 
 async function submitLog() {
-  const id = parseInt(document.getElementById('modal-activity').value);
+  const area = document.getElementById('modal-area').value;
+  const actName = document.getElementById('modal-activity').value;
+  // Find matching ACTIVITIES entry or use 0
+  const matchedAct = ACTIVITIES.find(a => a.pillar === area && a.name === actName);
+  const id = matchedAct ? matchedAct.id : 0;
   const status = document.getElementById('modal-status').value;
   const notes = document.getElementById('modal-notes').value;
   const geo = document.getElementById('modal-geo').value;
@@ -926,7 +982,13 @@ async function submitLog() {
   btn.disabled = true;
   btn.textContent = 'Saving…';
 
-  const row = { activity_id: id, org: currentOrg, status, notes, geography: geo };
+  const act = actName;
+  const subIdx = document.getElementById('modal-subactivity').value;
+  const subActivity = subIdx !== '' && area && act ? (ACTIVITIES_DATA[area]?.[act]?.[subIdx]?.sub || '') : '';
+  const indicator = subIdx !== '' && area && act ? (ACTIVITIES_DATA[area]?.[act]?.[subIdx]?.indicator || '') : '';
+  const geo = getGeoValue();
+  const actLabel = area && act ? `${area} › ${act}${subActivity ? ' › ' + subActivity : ''}` : String(id);
+  const row = { activity_id: id, org: currentOrg, status, notes, geography: geo, activity_label: actLabel, indicator };
 
   if (sbClient) {
     try {
@@ -946,8 +1008,7 @@ async function submitLog() {
   renderActivities();
   renderDashboard();
   btn.textContent = 'Save to database';
-  const act = ACTIVITIES.find(a => a.id === id);
-  showToast(`✓ Saved: "${act.name}"`);
+  showToast(`✓ Saved: "${actName || 'Activity'}"`);
 }
 
 // ─── REPORT ───────────────────────────────────────────────────────────────────
@@ -1131,6 +1192,124 @@ function showToast(msg) {
 
 document.getElementById('log-modal').addEventListener('click', function(e) { if (e.target===this) closeModal(); });
 document.getElementById('modal-date').value = new Date().toISOString().split('T')[0];
+
+// ─── GEOGRAPHY MODAL HELPERS ──────────────────────────────────────────────────
+function updateGeoSelects() {
+  const level = document.getElementById('modal-level').value;
+  document.getElementById('geo-state-group').style.display = ['State','Regional','District'].includes(level) ? '' : 'none';
+  document.getElementById('geo-region-group').style.display = ['Regional','District'].includes(level) ? '' : 'none';
+  document.getElementById('geo-district-group').style.display = level === 'District' ? '' : 'none';
+  document.getElementById('dist-code-badge').textContent = '';
+  // Populate state dropdown
+  const stateEl = document.getElementById('modal-state');
+  stateEl.innerHTML = '<option value="">— select state —</option>';
+  Object.keys(GEO_DATA).forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    stateEl.appendChild(opt);
+  });
+  document.getElementById('modal-region').innerHTML = '<option value="">— select region —</option>';
+  document.getElementById('modal-district').innerHTML = '<option value="">— select district —</option>';
+}
+
+function updateRegionSelect() {
+  const state = document.getElementById('modal-state').value;
+  const regionEl = document.getElementById('modal-region');
+  regionEl.innerHTML = '<option value="">— select region —</option>';
+  document.getElementById('modal-district').innerHTML = '<option value="">— select district —</option>';
+  document.getElementById('dist-code-badge').textContent = '';
+  if (!state || !GEO_DATA[state]) return;
+  Object.entries(GEO_DATA[state]).forEach(([rName, rData]) => {
+    const opt = document.createElement('option');
+    opt.value = rName; opt.textContent = `${rName} (${rData.code})`;
+    regionEl.appendChild(opt);
+  });
+}
+
+function updateDistrictSelect() {
+  const state = document.getElementById('modal-state').value;
+  const region = document.getElementById('modal-region').value;
+  const distEl = document.getElementById('modal-district');
+  distEl.innerHTML = '<option value="">— select district —</option>';
+  document.getElementById('dist-code-badge').textContent = '';
+  if (!state || !region || !GEO_DATA[state]?.[region]) return;
+  GEO_DATA[state][region].districts.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.code; opt.textContent = `${d.name} (${d.code})`;
+    distEl.appendChild(opt);
+  });
+}
+
+function updateDistrictCode() {
+  const code = document.getElementById('modal-district').value;
+  document.getElementById('dist-code-badge').textContent = code ? `Code: ${code}` : '';
+}
+
+function getGeoValue() {
+  const level = document.getElementById('modal-level').value;
+  if (level === 'National') return 'National';
+  const state = document.getElementById('modal-state').value || '';
+  const region = document.getElementById('modal-region').value || '';
+  const dist = document.getElementById('modal-district').value || '';
+  const distName = document.getElementById('modal-district').options[document.getElementById('modal-district').selectedIndex]?.text || '';
+  if (level === 'District' && dist) return `${distName} · ${region} · ${state}`;
+  if (level === 'Regional' && region) return `${region} · ${state}`;
+  return state || 'National';
+}
+
+// ─── ACTIVITY MODAL HELPERS ────────────────────────────────────────────────────
+function initAreaSelect() {
+  const areaEl = document.getElementById('modal-area');
+  areaEl.innerHTML = '<option value="">— select area —</option>';
+  Object.keys(ACTIVITIES_DATA).forEach(area => {
+    const opt = document.createElement('option');
+    opt.value = area; opt.textContent = area;
+    areaEl.appendChild(opt);
+  });
+}
+
+function updateActivitySelect() {
+  const area = document.getElementById('modal-area').value;
+  const actEl = document.getElementById('modal-activity');
+  actEl.innerHTML = '<option value="">— select activity —</option>';
+  document.getElementById('modal-subactivity').innerHTML = '<option value="">— select sub-activity —</option>';
+  document.getElementById('indicator-group').style.display = 'none';
+  if (!area || !ACTIVITIES_DATA[area]) return;
+  Object.keys(ACTIVITIES_DATA[area]).forEach(act => {
+    const opt = document.createElement('option');
+    opt.value = act; opt.textContent = act;
+    actEl.appendChild(opt);
+  });
+}
+
+function updateSubActivitySelect() {
+  const area = document.getElementById('modal-area').value;
+  const act = document.getElementById('modal-activity').value;
+  const subEl = document.getElementById('modal-subactivity');
+  subEl.innerHTML = '<option value="">— select sub-activity —</option>';
+  document.getElementById('indicator-group').style.display = 'none';
+  if (!area || !act || !ACTIVITIES_DATA[area]?.[act]) return;
+  ACTIVITIES_DATA[area][act].forEach((s, i) => {
+    const opt = document.createElement('option');
+    opt.value = i; opt.textContent = s.sub;
+    subEl.appendChild(opt);
+  });
+}
+
+function updateIndicator() {
+  const area = document.getElementById('modal-area').value;
+  const act = document.getElementById('modal-activity').value;
+  const idx = document.getElementById('modal-subactivity').value;
+  const group = document.getElementById('indicator-group');
+  const display = document.getElementById('indicator-display');
+  if (area && act && idx !== '' && ACTIVITIES_DATA[area]?.[act]?.[idx]) {
+    const s = ACTIVITIES_DATA[area][act][idx];
+    display.textContent = s.indicator || 'No indicator defined';
+    group.style.display = '';
+  } else {
+    group.style.display = 'none';
+  }
+}
 
 // ─── START ────────────────────────────────────────────────────────────────────
 init();
